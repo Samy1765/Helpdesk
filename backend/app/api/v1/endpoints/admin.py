@@ -93,8 +93,8 @@ async def system_status(user: User = Depends(admin_only)):
         "environment": settings.APP_ENV,
         "database": "sqlite" if settings.is_sqlite else "postgresql",
         "llm": {
-            "small": {"provider": settings.LLM_SMALL_PROVIDER, "model": settings.LLM_SMALL_MODEL},
-            "large": {"provider": settings.LLM_LARGE_PROVIDER, "model": settings.LLM_LARGE_MODEL},
+            "small": {"provider": settings.LLM_SMALL_PROVIDER, "model": settings.tier_model("small")},
+            "large": {"provider": settings.LLM_LARGE_PROVIDER, "model": settings.tier_model("large")},
             "available": await available_tiers(),
         },
         "vector_store": {"backend": "faiss", **get_index_manager().stats()},

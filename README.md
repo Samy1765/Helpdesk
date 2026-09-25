@@ -124,9 +124,9 @@ All seed people, tickets and emails are synthetic (`@example.com`). For a real d
 Without any model, the system runs levels 0 to 3 deterministically and escalates what it cannot solve. To enable levels 4 and 5:
 
 * **Local and free:** install [Ollama](https://ollama.com) and run `ollama pull llama3.2` (the default small tier). With Docker, use `docker compose --profile llm up --build`, then `docker compose exec ollama ollama pull llama3.2`.
-* **Cloud:** set `GROQ_API_KEY` in `.env` (the default large tier), or set `LLM_LARGE_PROVIDER=openai` or `gemini` together with that provider's key.
+* **Cloud:** set `GROQ_API_KEY` ([get one](https://console.groq.com/keys)) for the default large tier, `openai/gpt-oss-120b`. To use another provider instead, set `LLM_LARGE_PROVIDER=openai` or `gemini` together with that provider's key; the tier then uses that provider's own default model (`OPENAI_MODEL`, `GEMINI_MODEL`) unless `LLM_LARGE_MODEL` is set explicitly.
 
-The *System status* panel on the `/admin` page shows which tiers are reachable.
+If only one tier is reachable, the other tier's tasks fall back to it. The *System status* panel on the `/admin` page shows which tiers are configured. A failed call logs the provider's reason (e.g. `llm_call ok=False error='groq: HTTP 401 - Invalid API Key'`) in the server console and in `GET /api/v1/admin/llm-calls`.
 
 ---
 

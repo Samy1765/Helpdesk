@@ -10,6 +10,7 @@ retries with timeouts, and a usage row (tokens, cost, latency, cache hit) for ev
 If no provider is reachable the router returns None and callers fall back to deterministic logic.
 """
 
+import asyncio
 import hashlib
 import json
 import re
@@ -70,11 +71,13 @@ _cache = _LRUCache(settings.LLM_CACHE_SIZE)
 
 def _tier_chain(tier: str) -> list[tuple[str, str, str]]:
     """(tier, provider, model) in the order they should be tried."""
-    small = (SMALL, settings.LLM_SMALL_PROVIDER, settings.LLM_SMALL_MODEL)
-    large = (LARGE, settings.LLM_LARGE_PROVIDER, settings.LLM_LARGE_MODEL)
+    small = (SMALL, settings.LLM_SMALL_PROVIDER, settings.tier_model(SMALL))
+    large = (LARGE, settings.LLM_LARGE_PROVIDER, settings.tier_model(LARGE))
     # A small-tier task may fall forward to the large model (still works, costs more);
     # a large-tier task may degrade to the small model rather than failing.
-    return [small, large] if tier == SMALL else [large, small]
+    chain = [small, large] if tier == SMALL else [large, small]
+    # Both tiers on the same provider+model: one attempt is enough
+    return chain[:1] if chain[0][1:] == chain[1][1:] else chain
 
 
 def extract_json(text: str) -> Optional[dict]:
@@ -96,7 +99,8 @@ def extract_json(text: str) -> Optional[dict]:
 
 async def available_tiers() -> dict[str, Optional[str]]:
     out: dict[str, Optional[str]] = {}
-    for tier, prov_name, model in (_tier_chain(SMALL)[0], _tier_chain(LARGE)[0]):
+    for tier, prov_name, model in ((SMALL, settings.LLM_SMALL_PROVIDER, settings.tier_model(SMALL)),
+                                   (LARGE, settings.LLM_LARGE_PROVIDER, settings.tier_model(LARGE))):
         prov = get_provider(prov_name)
         out[tier] = f"{prov_name}:{model}" if prov and await prov.is_available() else None
     return out
@@ -130,16 +134,21 @@ async def complete(
         error: Optional[str] = None
 
         if response is None:
-            for _attempt in range(settings.LLM_MAX_RETRIES + 1):
+            for attempt in range(settings.LLM_MAX_RETRIES + 1):
                 try:
                     response = await provider.generate(
                         prompt, model=model, system_prompt=system_prompt,
                         temperature=temperature, max_tokens=max_tokens, json_mode=schema is not None,
+                        json_schema=schema.model_json_schema() if schema is not None else None,
                     )
                     error = None
                     break
                 except LLMUnavailableError as exc:
                     error = str(exc)[:300]
+                    # A bad key, unknown model or rejected request fails the same way every time
+                    if not exc.retryable or attempt == settings.LLM_MAX_RETRIES:
+                        break
+                    await asyncio.sleep(0.5 * 2 ** attempt)
 
         parsed = None
         if response is not None and schema is not None:

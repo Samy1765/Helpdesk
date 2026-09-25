@@ -1,10 +1,14 @@
 """Agent state machine, tool permissions, output safety filter, LLM router validation/caching/fallback."""
 
+from types import SimpleNamespace
+
+import httpx
 import pytest
 
 from app.agents.state_machine import AgentState as S, InvalidTransition, assert_transition, can_transition
 from app.llm import router
-from app.llm.providers import LLMProvider, LLMResponse
+from app.llm.providers import (GeminiProvider, GroqProvider, LLMProvider, LLMResponse, LLMUnavailableError,
+                               OllamaProvider, OpenAIProvider, describe_http_error)
 from app.rag.generator import GeneratedSolution
 from app.tools.registry import DANGEROUS, RESTRICTED, SAFE, TOOLS, get_tool
 from app.tools.safety import filter_steps, screen_text
@@ -96,3 +100,70 @@ async def test_llm_router_rejects_invalid_output_and_degrades(db, monkeypatch):
     assert res is None  # never trust unvalidated LLM JSON
     monkeypatch.setattr(router, "get_provider", lambda name: None)
     assert await router.complete(db=db, purpose="t", prompt="x", system_prompt="y") is None
+
+
+def test_tier_model_defaults_to_the_providers_model(monkeypatch):
+    s = router.settings
+    monkeypatch.setattr(s, "LLM_LARGE_PROVIDER", "openai")
+    monkeypatch.setattr(s, "LLM_LARGE_MODEL", "")
+    assert s.tier_model("large") == s.OPENAI_MODEL  # switching provider never sends another provider's model
+    monkeypatch.setattr(s, "LLM_LARGE_MODEL", "gpt-5-mini")
+    assert s.tier_model("large") == "gpt-5-mini"
+    monkeypatch.setattr(s, "LLM_SMALL_PROVIDER", "openai")
+    monkeypatch.setattr(s, "LLM_SMALL_MODEL", "gpt-5-mini")
+    assert len(router._tier_chain(router.SMALL)) == 1  # same model on both tiers is tried once
+
+
+def test_request_bodies_match_each_model_family():
+    common = dict(system_prompt="s", temperature=0.2, max_tokens=700, json_mode=True)
+    oss = GroqProvider().build_body("p", model="openai/gpt-oss-120b", **common)
+    assert oss["reasoning_effort"] == "low" and oss["max_completion_tokens"] > 700 and "temperature" in oss
+    mini = OpenAIProvider().build_body("p", model="gpt-4o-mini", **common)
+    assert mini["max_completion_tokens"] == 700 and mini["temperature"] == 0.2 and "reasoning_effort" not in mini
+    gpt5 = OpenAIProvider().build_body("p", model="gpt-5-mini", **common)
+    assert "temperature" not in gpt5 and gpt5["reasoning_effort"] == "low"
+    assert all("max_tokens" not in b for b in (oss, mini, gpt5))
+    gem = GeminiProvider().build_body("p", model="gemini-3.5-flash-lite", **common)
+    assert gem["generationConfig"]["maxOutputTokens"] > 700  # thinking tokens share the output budget
+    schema = GeneratedSolution.model_json_schema()
+    assert OllamaProvider().build_body("p", model="llama3.2", json_schema=schema, **common)["format"] == schema
+
+
+def _status_error(code: int, body: dict) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", "https://api.example.com/v1/chat/completions")
+    return httpx.HTTPStatusError("err", request=req, response=httpx.Response(code, json=body, request=req))
+
+
+def test_http_errors_are_explained_redacted_and_classified():
+    gone = describe_http_error("groq", _status_error(404, {"error": {
+        "message": "The model `llama-3.3-70b-versatile` has been decommissioned", "code": "model_decommissioned"}}))
+    assert "HTTP 404" in str(gone) and "decommissioned" in str(gone) and not gone.retryable
+    bad_key = describe_http_error("openai", _status_error(401, {"error": {
+        "message": "Incorrect API key provided: sk-proj-abc123****wxyz. Find your key at ..."}}))
+    assert "HTTP 401" in str(bad_key) and "sk-" not in str(bad_key) and not bad_key.retryable
+    assert describe_http_error("groq", _status_error(429, {"error": {"message": "Rate limit"}})).retryable
+    assert describe_http_error("groq", httpx.ConnectTimeout("timed out")).retryable
+
+
+class FailingProvider(FakeProvider):
+    def __init__(self, retryable: bool):
+        super().__init__("")
+        self.retryable = retryable
+
+    async def generate(self, prompt, **kw):
+        self.calls += 1
+        raise LLMUnavailableError("fake: HTTP 503" if self.retryable else "fake: HTTP 401", retryable=self.retryable)
+
+
+@pytest.mark.parametrize("retryable", [True, False])
+async def test_llm_router_retries_only_transient_errors(db, monkeypatch, retryable):
+    async def no_sleep(_seconds):
+        return None
+
+    failing = FailingProvider(retryable)
+    monkeypatch.setattr(router, "asyncio", SimpleNamespace(sleep=no_sleep))
+    monkeypatch.setattr(router, "get_provider", lambda name: failing if name == "fake" else None)
+    monkeypatch.setattr(router.settings, "LLM_SMALL_PROVIDER", "fake")
+    router.clear_cache()
+    assert await router.complete(db=db, purpose="t", prompt="x", system_prompt="y") is None
+    assert failing.calls == (router.settings.LLM_MAX_RETRIES + 1 if retryable else 1)
