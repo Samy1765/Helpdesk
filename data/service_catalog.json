@@ -1,0 +1,15 @@
+{
+  "_comment": "Services the agent may probe with SAFE read-only checks. Replace the example hosts with your real endpoints (VPN gateway, mail, DB listener...). Entries with enabled=false are ignored.",
+  "services": [
+    {"name": "public-dns", "label": "Public DNS resolution", "type": "dns", "host": "one.one.one.one",
+     "categories": ["Network", "VPN"]},
+    {"name": "internet-egress", "label": "Internet egress (HTTPS)", "type": "tcp", "host": "1.1.1.1", "port": 443,
+     "categories": ["Network", "VPN"]},
+    {"name": "m365-exchange", "label": "Microsoft 365 Exchange Online", "type": "tcp",
+     "host": "outlook.office365.com", "port": 443, "categories": ["Email"]},
+    {"name": "vpn-gateway", "label": "Corporate VPN gateway", "type": "tcp", "host": "vpn.corp.example",
+     "port": 443, "categories": ["VPN"], "enabled": false},
+    {"name": "prod-db-listener", "label": "Production DB listener", "type": "tcp", "host": "db.corp.example",
+     "port": 5432, "categories": ["Database"], "enabled": false}
+  ]
+}

@@ -1,0 +1,24 @@
+[project]
+name = "precision-ai-backend"
+version = "1.0.0"
+description = "Precision AI - AI-Powered IT Helpdesk Ticketing, Troubleshooting and Autonomous Resolution System"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.pyrefly]
+python-interpreter = "venv/Scripts/python.exe"
+
+[tool.pyright]
+venvPath = "."
+venv = "venv"

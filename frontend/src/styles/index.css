@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* Precision IT Engine design tokens (see DESIGN.md) */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", "Inter", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
+  --color-muted: #f1f5f9;
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
+
+  --color-ink: #0f172a;
+  --color-ink-2: #1e293b;
+  --color-body: #334155;
+  --color-meta: #64748b;
+  --color-faint: #94a3b8;
+
+  --color-cobalt: #2563eb;
+  --color-cobalt-dark: #1e40af;
+  --color-cobalt-soft: #eff6ff;
+  --color-cobalt-line: #bfdbfe;
+  --color-cobalt-ring: #93c5fd;
+
+  --color-ok: #16a34a;
+  --color-ok-ink: #15803d;
+  --color-ok-soft: #f0fdf4;
+  --color-ok-line: #bbf7d0;
+
+  --color-warn: #d97706;
+  --color-warn-ink: #b45309;
+  --color-warn-soft: #fffbeb;
+  --color-warn-line: #fde68a;
+
+  --color-crit: #dc2626;
+  --color-crit-ink: #b91c1c;
+  --color-crit-soft: #fef2f2;
+  --color-crit-line: #fecaca;
+
+  --color-info: #0284c7;
+  --color-info-soft: #f0f9ff;
+  --color-info-line: #bae6fd;
+
+  --color-violet: #7c3aed;
+  --color-violet-soft: #f5f3ff;
+  --color-violet-line: #ddd6fe;
+
+  --radius-sm: 0.125rem;
+  --radius: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  --shadow-hover: 0 1px 3px 0 rgba(15, 23, 42, 0.05);
+  --shadow-pop: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  --shadow-modal: 0 12px 24px -4px rgba(15, 23, 42, 0.12);
+
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3, h4 { @apply font-display text-ink; }
+  :focus-visible { outline: 2px solid var(--color-cobalt-ring); outline-offset: 2px; }
+  ::selection { background: #dbeafe; }
+}
+
+/* Component classes are declared with @utility so they compose via @apply and accept variants/`!` (Tailwind v4). */
+/* Level 1 card: white surface, hairline border, no resting shadow */
+@utility card { @apply bg-surface border border-line rounded-lg; }
+@utility card-hover { @apply transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-hover; }
+@utility card-header { @apply flex items-center justify-between gap-3 px-4 py-3 border-b border-muted; }
+
+@utility label-caps { @apply text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-meta leading-4; }
+@utility mono { @apply font-mono tabular-nums; }
+@utility code-chip { @apply font-mono text-[0.75rem] font-medium rounded border border-line bg-muted px-1.5 py-0.5 text-body; }
+
+@utility btn { @apply inline-flex items-center justify-center gap-2 rounded px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+@utility btn-primary { @apply btn bg-ink text-white hover:bg-ink-2; }
+@utility btn-accent { @apply btn bg-cobalt text-white hover:bg-cobalt-dark; }
+@utility btn-outline { @apply btn bg-surface border border-line text-body hover:bg-canvas hover:border-line-strong; }
+@utility btn-danger { @apply btn bg-crit-soft border border-crit-line text-crit hover:bg-[#fee2e2]; }
+@utility btn-ghost { @apply btn text-meta hover:text-ink hover:bg-muted; }
+@utility btn-sm { @apply px-2.5 py-1.5 text-xs; }
+
+@utility input { @apply w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint outline-none transition-shadow focus:border-cobalt focus:shadow-[0_0_0_1px_var(--color-cobalt)]; }
+@utility select { @apply input pr-8 appearance-none bg-no-repeat bg-[right_0.6rem_center]; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+
+@utility badge { @apply inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4 whitespace-nowrap; }
+@utility dot { @apply inline-block size-2 rounded-full; }
+
+/* thin scrollbars for dense panels */
+.scroll-thin { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }

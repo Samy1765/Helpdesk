@@ -1,0 +1,50 @@
+# Precision AI - local / single-host deployment
+#   cp .env.example .env        # then set SECRET_KEY (and optionally an LLM key)
+#   docker compose up --build   # app on http://localhost:8000
+#   docker compose --profile llm up --build   # also run a local Ollama model server
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-precision_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-precision_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-precision_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-precision_user} -d ${POSTGRES_DB:-precision_ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-precision_user}:${POSTGRES_PASSWORD:-precision_pass}@db:5432/${POSTGRES_DB:-precision_ai}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      CORS_ORIGINS: '["http://localhost:8000"]'
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - faiss:/app/faiss_indexes      # rebuilt from PostgreSQL automatically if lost
+      - uploads:/app/data/uploads
+
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    # After start: docker compose exec ollama ollama pull llama3.2
+
+volumes:
+  pgdata:
+  faiss:
+  uploads:
+  ollama:

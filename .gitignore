@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+*.db.bak
+
+# FAISS indexes (always rebuildable from PostgreSQL)
+faiss_indexes/*
+!faiss_indexes/.gitkeep
+
+# Uploaded attachments
+data/uploads/
+
+# Node / build
+node_modules/
+frontend/dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

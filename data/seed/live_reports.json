@@ -1,0 +1,28 @@
+{
+  "_comment": "Replayed through the real chat + agent pipeline by the seed script (python -m app.database.seed). 'answers' reply to clarifying questions in order; 'feedback' answers 'did this fix it?' in order; 'approve' approves pending restricted actions first.",
+  "reports": [
+    {"user": "ewhite", "message": "I cannot access my company email, Outlook keeps saying disconnected and web mail won't load either",
+     "answers": ["Web mail fails too", "A few colleagues"], "feedback": []},
+    {"user": "fzhang", "message": "Company email is not working for me since 10 minutes, Outlook shows disconnected and webmail does not load",
+     "answers": ["Web mail fails too", "Others too"], "feedback": []},
+    {"user": "gadams", "message": "Cannot access my email at all - Outlook disconnected and the web mail page just spins",
+     "answers": ["Web mail fails too", "My whole team / department"], "feedback": []},
+
+    {"user": "kwright", "message": "My VPN keeps timing out on login right after I enter the 2FA code on my Windows laptop",
+     "answers": ["Just me"], "feedback": ["Yes, it's fixed"]},
+    {"user": "bcooper", "message": "Documents I send to the printer on floor 3 are stuck in the queue and nothing prints",
+     "answers": ["Jobs stuck in the queue", "Just me"], "feedback": []},
+    {"user": "bcooper", "message": "The floor 3 printer still has my jobs stuck in the print queue, nothing is printing",
+     "answers": ["Jobs stuck in the queue", "Just me"], "feedback": []},
+    {"user": "ewhite", "message": "My account is locked out after I changed my password yesterday, cannot sign in",
+     "answers": ["Just me"], "approve": true, "feedback": ["Yes, it's fixed"]},
+    {"user": "fzhang", "message": "I got an email from 'IT support' and clicked the link and entered my password before I realised it was fake",
+     "answers": ["I clicked a link / entered my password", "Just me"], "feedback": []},
+    {"user": "gadams", "message": "I dropped my laptop and the screen is cracked, there are lines across the display",
+     "answers": ["Just me"], "feedback": []},
+    {"user": "kwright", "user_priority": "critical", "message": "I would like to change my desktop wallpaper to the new company theme, not urgent",
+     "answers": ["Just me"], "feedback": []},
+    {"user": "bcooper", "message": "Wi-Fi in the office is connected but I have no internet on my laptop, my phone works",
+     "answers": ["Wi-Fi only", "Just me"], "feedback": ["No, still not working", "No, still not working"]}
+  ]
+}
