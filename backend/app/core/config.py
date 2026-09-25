@@ -40,25 +40,32 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
 
     # ---- LLM providers ----
+    # Each provider's *_MODEL is its default; a tier uses it unless LLM_<TIER>_MODEL is set.
     GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
 
     # Tiered routing: small (cheap/local) model for extraction + simple troubleshooting,
     # large model only for complex/ambiguous cases. Providers: ollama | groq | openai | gemini | none
     LLM_SMALL_PROVIDER: str = "ollama"
-    LLM_SMALL_MODEL: str = "llama3.2"
+    LLM_SMALL_MODEL: str = ""  # blank = the provider's default model
     LLM_LARGE_PROVIDER: str = "groq"
-    LLM_LARGE_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_LARGE_MODEL: str = ""
     LLM_TIMEOUT_SECONDS: float = 30.0
     LLM_MAX_RETRIES: int = 2
     LLM_CACHE_SIZE: int = 512
-    # Reference price (USD / 1K tokens) of the large model; used to estimate savings
-    LLM_REFERENCE_COST_PER_1K: float = 0.0006
+    # Reasoning models (gpt-oss, gpt-5, Gemini 2.5+/3) think before answering. Effort applies where the
+    # API accepts it; the extra token budget keeps thinking from truncating the JSON answer.
+    LLM_REASONING_EFFORT: str = "low"
+    LLM_REASONING_EXTRA_TOKENS: int = 1024
+    # Reference price (USD / 1K tokens) of the large model; used to estimate savings.
+    # gpt-oss-120b on Groq: $0.15 in / $0.60 out per 1M, blended at ~4:1 input:output.
+    LLM_REFERENCE_COST_PER_1K: float = 0.00024
     # Estimated tokens a full LLM troubleshooting call consumes when no measured data exists yet
     LLM_ESTIMATED_TOKENS_PER_CALL: int = 1200
 
@@ -98,6 +105,16 @@ class Settings(BaseSettings):
     @property
     def sla_minutes(self) -> dict[str, int]:
         return json.loads(self.SLA_MINUTES)
+
+    def tier_model(self, tier: str) -> str:
+        """Model for a tier: LLM_<TIER>_MODEL, or the tier provider's default when blank, so switching
+        LLM_LARGE_PROVIDER=openai never sends a Groq model name to OpenAI."""
+        provider, model = ((self.LLM_SMALL_PROVIDER, self.LLM_SMALL_MODEL) if tier == "small"
+                           else (self.LLM_LARGE_PROVIDER, self.LLM_LARGE_MODEL))
+        if model.strip():
+            return model.strip()
+        return {"groq": self.GROQ_MODEL, "openai": self.OPENAI_MODEL, "gemini": self.GEMINI_MODEL,
+                "ollama": self.OLLAMA_MODEL}.get((provider or "").lower(), "")
 
     # Logging
     LOG_LEVEL: str = "INFO"
