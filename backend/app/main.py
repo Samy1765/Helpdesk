@@ -125,7 +125,7 @@ if settings.SERVE_FRONTEND and (dist / "index.html").exists():
     if (dist / "assets").exists():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)  # HEAD: `curl -I`, uptime checks
     async def spa(full_path: str):
         if full_path.startswith("api/"):
             return JSONResponse(status_code=404, content={"detail": "Not Found"})

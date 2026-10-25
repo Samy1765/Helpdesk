@@ -21,5 +21,6 @@ fi
 # One worker: the FAISS index lives in-process. Scale out by swapping the VectorStore for pgvector.
 # X-Forwarded-For / -Proto are trusted only from FORWARDED_ALLOW_IPS (set it to your reverse proxy's address);
 # otherwise any client could spoof the IP used by the audit log and the sign-in rate limits.
-exec uvicorn app.main:app --host 0.0.0.0 --port "${APP_PORT:-8000}" --workers 1 --proxy-headers \
+# The container always listens on 8000 (EXPOSE, HEALTHCHECK); APP_PORT only picks the host port in docker-compose.yml.
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers \
   --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}"
