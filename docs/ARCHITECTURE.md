@@ -8,7 +8,7 @@ flowchart LR
         UI[React SPA<br/>Chat · Tickets · Incidents · KB · Support · Admin]
     end
     subgraph API["FastAPI (single process)"]
-        AUTH[Auth / RBAC<br/>JWT + bcrypt]
+        AUTH[Auth / RBAC<br/>sessions + JWT + bcrypt]
         CHAT[Chat service<br/>intake + clarifying]
         AGENT[Troubleshooting agent<br/>persistent state machine]
         CLS[Classification<br/>rules → LLM]
@@ -92,8 +92,16 @@ Transitions are validated (`assert_transition`); an invalid jump raises. Any non
 
 * There is **no arbitrary-shell tool**; unknown tool names are recorded as `blocked`.
 * State-changing actions go through an `ActionConnector`. The shipped connector is a **dry run** (records the approved action) — wire an endpoint-management/identity connector in `tools/executor.py:get_connector()` for production.
-* Generated text passes `tools/safety.py` (destructive commands, disabling security software, credential requests); unsafe steps are removed and flagged.
+* Generated text passes `tools/safety.py`: destructive commands, disabling security software or MFA, antivirus exclusions, download cradles, log or shadow-copy deletion, local-admin creation, execution-policy bypass, world-writable permissions and credential requests are removed and flagged. Links and phone numbers that do not appear in the retrieved context are treated as invented and removed.
 * LLM JSON is always schema-validated (pydantic); categories outside the active set, missing citations for grounded answers, or malformed output are rejected.
+* **Prompt-injection boundary** (`llm/untrusted.py`): employee text, ticket fields, diagnostics and retrieved knowledge reach a model only inside `<untrusted>` blocks with tag look-alikes stripped, and every system prompt says block content is data. Model output is never executed: AI-written candidates cannot carry tool actions.
+
+### Authentication and sessions
+
+* Every sign-in creates a row in `auth_sessions`. The access token carries the session id (`sid`) and is rejected once that session is revoked; the refresh token carries a one-time id (`jti`) that rotates on every refresh. Presenting a replaced refresh token revokes the session (it has been copied), except within 30 seconds of the rotation, when two tabs refreshing at once receive the current pair.
+* Logout revokes the session; a password change or deactivation revokes all of the user's sessions.
+* Failed sign-ins are counted per identifier in `login_throttle` (unknown usernames too, so a lockout reveals nothing) and per client IP; both answer `429` with `Retry-After`. Error messages and response times are the same whether or not the account exists.
+* `core/middleware.py` adds CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and HSTS (over HTTPS), and limits request bodies (1 MB JSON, upload size + overhead). The full review is in [SECURITY.md](SECURITY.md).
 
 ## 6. Data model (PostgreSQL)
 
@@ -113,8 +121,9 @@ Transitions are validated (`assert_transition`); an invalid jump raises. Any non
 | `agent_runs`, `agent_actions` | agent state/working memory; tool calls with permission + approval state |
 | `incidents` | correlated incident groups |
 | `llm_usage_log`, `audit_logs`, `attachments` | observability, security audit, uploads |
+| `auth_sessions`, `login_throttle` | sign-in sessions (rotation, revocation) and failed-sign-in counters |
 
-JSONB is used only for genuinely flexible data (entities, payload cards, agent working memory, escalation packages). Schema changes go through **Alembic** (`backend/migrations`); the initial migration upgrades/downgrades cleanly on PostgreSQL 16 and SQLite.
+JSONB is used only for genuinely flexible data (entities, payload cards, agent working memory, escalation packages). Schema changes go through **Alembic** (`backend/migrations`: `0001` initial schema, `0002` sessions and throttling, `0003` knowledge review dates); every migration upgrades and downgrades cleanly on PostgreSQL 16 and SQLite, and `alembic check` reports no drift from the models.
 
 ## 7. Vector search (FAISS)
 
@@ -143,6 +152,10 @@ Measured with `all-MiniLM-L6-v2` on sample pairs: paraphrases of the same issue 
 * Retrieval score = similarity × (0.75 + 0.25 × trust) + intent match + success-rate adjustment.
 * A solution that keeps failing (≥3 failures, <40% success) is withdrawn automatically until reviewed.
 
+### Knowledge base content
+
+`data/knowledge` holds 43 runbooks (all ten categories) written for the fictional company used in the demo. Each has front matter (`title`, `category`, `doc_type`, `owner`, `last_reviewed`) and three kinds of section: **Symptoms**, one or more numbered **Resolution** procedures and **Escalation criteria**. Every section is indexed, so a description of symptoms finds the right article, but only Resolution sections are ever shown to an employee as steps: a match on Symptoms or Escalation criteria is mapped to the same document's procedure (`rag/retriever.py:procedure_for`). `data/seed/verified_solutions.json` adds 33 human-verified fixes linked to the runbooks; they are what the agent reuses at L3 without a model call. `last_reviewed` is stored on each document, shown to readers, and reset whenever IT edits the content.
+
 ## 9. Observability
 
 Structured logs (structlog, JSON in production) with a request id per HTTP call and events such as `ticket_classified`, `llm_call` (provider, tokens, latency, cache hit), `tool_invoked`, `ticket_escalated`, `incident_created`. A redaction processor masks any key that looks like a password/secret/token. Nothing personal beyond ids is logged.
@@ -153,4 +166,6 @@ Structured logs (structlog, JSON in production) with a request id per HTTP call 
 * **Restricted actions are dry-run** until a real endpoint-management / identity connector is configured.
 * **Diagnostics are server-side.** SAFE probes check services from the helpdesk host (per `data/service_catalog.json`), not the employee's device; device-side steps are given to the user.
 * **Rules classifier** reaches 87.5% on the small held-out set (see `docs/EVALUATION.md`); misses are routed to the LLM when one is configured, and IT can correct category/priority.
-* JWT logout is client-side (tokens expire); add a deny-list for immediate revocation if required.
+* Tokens are kept in the browser's `localStorage`. The CSP allows no inline or third-party script, access tokens last 60 minutes and refresh tokens rotate, but `httpOnly` cookies (with CSRF protection) would be the stronger next step.
+* Per-IP and per-user rate limits are held in process memory (one worker); account lockouts are in the database.
+* The demo company is synthetic. Its quarter of tickets was generated, not observed, and no AI-model usage is invented for it: model metrics on the admin page only count calls that really happened.

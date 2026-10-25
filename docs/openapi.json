@@ -130,6 +130,7 @@
           "Authentication"
         ],
         "summary": "Refresh",
+        "description": "Rotate the refresh token. A token that was already used revokes its session (it has been copied).",
         "operationId": "refresh_api_v1_auth_refresh_post",
         "requestBody": {
           "content": {
@@ -169,7 +170,7 @@
           "Authentication"
         ],
         "summary": "Logout",
-        "description": "JWTs are stateless: the client discards its tokens. The logout is recorded for auditing.",
+        "description": "Revoke this sign-in session: its access token and refresh token stop working immediately.",
         "operationId": "logout_api_v1_auth_logout_post",
         "responses": {
           "200": {
@@ -260,6 +261,7 @@
           "Authentication"
         ],
         "summary": "Change Password",
+        "description": "Change the password, sign out every session and return tokens for a fresh one.",
         "operationId": "change_password_api_v1_auth_change_password_post",
         "requestBody": {
           "content": {
@@ -738,6 +740,62 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/FeedbackIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/rating": {
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Rate",
+        "description": "The requester rates how a closed ticket was handled (1-5). Rating again replaces the earlier score.",
+        "operationId": "rate_api_v1_tickets__ticket_id__rating_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RatingIn"
               }
             }
           }
@@ -3091,11 +3149,15 @@
         "properties": {
           "username": {
             "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Username",
             "description": "Username or email"
           },
           "password": {
             "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
             "title": "Password"
           }
         },
@@ -3110,6 +3172,7 @@
         "properties": {
           "current_password": {
             "type": "string",
+            "maxLength": 256,
             "title": "Current Password"
           },
           "new_password": {
@@ -3180,10 +3243,38 @@
         "type": "object",
         "title": "ProfileIn"
       },
+      "RatingIn": {
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rating"
+        ],
+        "title": "RatingIn"
+      },
       "RefreshIn": {
         "properties": {
           "refresh_token": {
             "type": "string",
+            "maxLength": 2048,
             "title": "Refresh Token"
           }
         },

@@ -7,9 +7,9 @@ cd backend
 python -m app.scripts.evaluate
 ```
 
-The script runs the **deterministic floor** of the system (no LLM) over `data/eval/eval_set.json`: 40 hand-labelled issue reports across all 10 categories and 20 labelled duplicate / non-duplicate pairs. The set is not used by the tests or the seed data, but it was written by the project author, so treat it as a sanity check on realistic phrasing — not an independent benchmark.
+The script runs the **deterministic floor** of the system (no LLM) over `data/eval/eval_set.json`: 40 hand-labelled issue reports across all 10 categories and 20 labelled duplicate / non-duplicate pairs. The set is not used by the tests or the seed data (`tests/test_knowledge_base.py` fails if any 8-word sequence from it appears in the seed data, the knowledge base or the tests), but it was written by the project author, so treat it as a sanity check on realistic phrasing — not an independent benchmark.
 
-## Results (all-MiniLM-L6-v2, measured 2026-09-25)
+## Results (all-MiniLM-L6-v2, measured 2026-09-25, re-run 2026-10-25 with identical results)
 
 | Metric | Result |
 |---|---|
@@ -35,7 +35,7 @@ With an LLM configured, reports whose rule confidence is below 0.6 are re-classi
 
 `python -m app.database.seed` replays 11 employee reports through the real chat + agent pipeline (no LLM configured). Observed on both SQLite and PostgreSQL 16:
 
-* 3 email-outage reports from different users → **INCIDENT-EMAIL-001** created automatically; earlier reports switched to "linked to incident".
+* 3 email-outage reports from different users → a new e-mail incident is created automatically (**INCIDENT-EMAIL-001**, or **INCIDENT-EMAIL-002** when the demo company's historical e-mail incident is present); earlier reports switched to "linked to incident".
 * A repeated printer report from the same user → marked **duplicate** of the first.
 * VPN MFA failure → **human-verified solution reused at L3 with zero LLM calls**, confirmed by the user → resolved; the solution's success counter incremented.
 * Account lockout → restricted `unlock_account` action approved by the employee → resolved.
@@ -44,4 +44,17 @@ With an LLM configured, reports whose rule confidence is below 0.6 are re-classi
 
 ## Test suite
 
-`pytest` — 79 tests covering authentication/RBAC, classification (all categories), priority rules, LLM output validation, FAISS persistence and drift-rebuild, retrieval gating, the knowledge trust ladder, agent state transitions, tool permissions, the safety filter, the LLM router (validation, cache, fallback), and end-to-end API workflows (resolve, retry→escalate, duplicates, incident correlation and resolution, approvals, IT resolution becoming reusable knowledge, analytics consistency, attachments). **All pass on SQLite and on PostgreSQL 16.2.**
+`pytest` — **241 tests**:
+
+| File | Tests | Covers |
+|---|---|---|
+| `test_auth.py` | 8 | registration, login, roles, token types |
+| `test_classification_priority.py` | 28 | classification of every category, priority rules |
+| `test_agent_safety_llm.py` | 24 | state machine, tool permissions, safety filter, LLM router |
+| `test_vector_rag.py` | 8 | FAISS persistence and drift rebuild, retrieval gating, trust ladder |
+| `test_workflows.py` | 16 | end-to-end API: resolve, retry → escalate, duplicates, incidents, approvals, analytics, attachments |
+| `test_security.py` | 68 | lockout and rate limits, session rotation and revocation, startup checks, headers, CORS, body limits, uploads, a 403 check on every IT/admin route, audit trail, prompt-injection boundary, safety filter cases, `.env.example` completeness, secret scan |
+| `test_knowledge_base.py` | 83 | structure and review metadata of every runbook, every verified solution reusable without an LLM, procedure selection, FAISS rebuild, separation from the evaluation set |
+| `test_demo_seed.py` | 6 | demo company seed end to end (migrations, counts, chronology, idempotency), ratings, SLA / satisfaction analytics |
+
+The original 84 tests are unchanged and still pass. CI runs the suite on SQLite and on PostgreSQL 16.
