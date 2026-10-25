@@ -66,7 +66,7 @@ async def incident_detail(incident_id: int, db: AsyncSession = Depends(get_db), 
     events = (await db.execute(select(TicketEvent).where(TicketEvent.ticket_id.in_([t.id for t in tickets]),
                                                          TicketEvent.event_type.in_(("ticket_created", "linked_to_incident",
                                                                                      "status_changed")))
-                               .order_by(TicketEvent.created_at.desc()).limit(40))).unique().scalars().all()
+                               .order_by(TicketEvent.created_at, TicketEvent.id).limit(80))).unique().scalars().all()
     staff = is_staff(user)
     mine = [t for t in tickets if t.user_id == user.id]
     departments = sorted({t.creator.department.name for t in tickets if t.creator and t.creator.department})

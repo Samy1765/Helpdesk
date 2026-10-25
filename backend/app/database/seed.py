@@ -3,6 +3,7 @@ Precision AI - Seed data (synthetic; no real personal information).
 
   python -m app.database.seed               # reference data + KB + history + live simulation
   python -m app.database.seed --no-simulate # skip replaying live reports through the agent
+  python -m app.database.seed --no-demo-org # skip the 90-day demo organisation (app/database/demo_data.py)
 
 Idempotent: reference data is upserted by natural key; tickets are only seeded into an empty DB.
 The "live" reports are replayed through the real chat/agent pipeline, so the agent runs, incidents,
@@ -21,8 +22,10 @@ from app.core.config import PROJECT_DIR, get_settings
 from app.core.logging import setup_logging
 from app.core.security import hash_password
 from app.database import async_session_factory, utcnow
+from app.database.demo_data import DEMO_PASSWORD, MARKER_USERNAME, seed_demo_org
 from app.models import (
-    Department, KnowledgeDocument, Role, Ticket, TicketCategory, TicketEscalation, TicketStatus, User,
+    Department, KnowledgeDocument, Role, Ticket, TicketCategory, TicketEscalation, TicketMessage, TicketStatus,
+    TroubleshootingStep, User,
 )
 from app.services import knowledge, tickets as ticket_svc
 from app.services.classification import DEFAULT_KEYWORDS, INTENTS, detect_intent, extract_entities
@@ -178,6 +181,9 @@ async def seed_history(db, ref: dict) -> int:
             source="historical_import")
         ticket.sub_category = next((i[2] for i in INTENTS if i[0] == ticket.intent), None)
         ticket.created_at = created
+        db.add(TicketMessage(ticket_id=ticket.id, user_id=user.id, role="user", content=row["description"], created_at=created))
+        db.add(TroubleshootingStep(ticket_id=ticket.id, step_key="understand", title="Ticket received",
+                                   detail="Imported from the previous helpdesk system", created_at=created))
         res = row.get("resolution")
         if res is None:
             ticket.status = row.get("status", TicketStatus.ESCALATED)
@@ -188,6 +194,13 @@ async def seed_history(db, ref: dict) -> int:
         ticket.status = TicketStatus.RESOLVED
         ticket.resolved_at = created + timedelta(hours=row["hours_to_resolve"])
         agent_user = staff_by_dept.get(cat.department_id)
+        by_it = not res.get("reuse_of") and res["source"] != "agent"
+        db.add(TroubleshootingStep(ticket_id=ticket.id, step_key="manual" if by_it else "verify",
+                                   title="Resolved by IT" if by_it else "Fix confirmed",
+                                   detail=res.get("summary") or "Employee confirmed the suggested fix worked",
+                                   performed_by="it_support" if by_it else "user",
+                                   created_by=agent_user.id if by_it and agent_user else None,
+                                   created_at=ticket.resolved_at))
         if res.get("reuse_of"):
             sol = group_solution[res["reuse_of"]]
             sol.times_used += 1
@@ -250,7 +263,7 @@ async def simulate_live_reports() -> list[str]:
     return log
 
 
-async def main(simulate: bool) -> None:
+async def main(simulate: bool, demo_org: bool = True) -> None:
     setup_logging()
     settings = get_settings()
     async with async_session_factory() as db:
@@ -259,8 +272,13 @@ async def main(simulate: bool) -> None:
         docs = await seed_knowledge(db, ref["categories"], ref["users"]["admin"])
         hist = await seed_history(db, ref)
         await db.commit()
+        demo = await seed_demo_org(db, ref) if hist and demo_org else {}
+        await db.commit()
         report = await get_index_manager().rebuild_all(db)
     print(f"Reference data ready. Knowledge docs added: {docs}. Historical tickets added: {hist}.")
+    if demo:
+        print("Demo organisation added (90 days of synthetic history): "
+              + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in demo.items()))
     print(f"FAISS indexes rebuilt from the database: {report}")
 
     if simulate and hist:
@@ -273,10 +291,13 @@ async def main(simulate: bool) -> None:
     print("  admin      / Admin@123     (administrator)")
     print("  itsupport  / Support@123   (IT support - Network Team; other teams: iam.agent, mail.agent, ...)")
     print("  johndoe    / Employee@123  (employee; also arivera, schen, ewhite, ...)")
+    if demo:
+        print(f"  Generated colleagues (e.g. {MARKER_USERNAME}) / {DEMO_PASSWORD}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-simulate", action="store_true")
+    parser.add_argument("--no-demo-org", action="store_true", help="skip the 90-day demo organisation")
     args = parser.parse_args()
-    asyncio.run(main(simulate=not args.no_simulate))
+    asyncio.run(main(simulate=not args.no_simulate, demo_org=not args.no_demo_org))

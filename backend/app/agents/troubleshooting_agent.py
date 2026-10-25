@@ -146,7 +146,7 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
     # UNDERSTAND + CLASSIFY were computed during intake; record them as evidence
     _move(run, S.UNDERSTAND)
     _progress(run, "understand", "done")
-    await ticket_svc.add_step(db, ticket, step_key="understand", title="Ticket ingestion",
+    await ticket_svc.add_step(db, ticket, step_key="understand", title="Ticket received",
                               detail=f"Created from AI chat conversation ({len(ticket.description)} chars collected)",
                               agent_run_id=run.id)
     _move(run, S.CLASSIFY)
@@ -154,7 +154,7 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
     _progress(run, "priority", "done")
     cls = intake.get("classification", {})
     await ticket_svc.add_step(
-        db, ticket, step_key="classify", title="Pattern classification",
+        db, ticket, step_key="classify", title="Category identified",
         detail=(f"{ticket.category_name} / {ticket.sub_category or ticket.intent or 'general'} "
                 f"({(ticket.ai_confidence or 0) * 100:.0f}% confidence, {cls.get('method', 'rules')}); "
                 f"priority {ticket.priority.upper()}"
@@ -170,7 +170,7 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
         await correlation.mark_duplicate(db, ticket, dup.ticket, dup.similarity)
         _progress(run, "duplicates", "done")
         _decide(run, f"Same-user duplicate of {dup.ticket.ticket_number} ({dup.similarity:.2f})")
-        await ticket_svc.add_step(db, ticket, step_key="check_duplicate", title="Duplicate detected",
+        await ticket_svc.add_step(db, ticket, step_key="check_duplicate", title="Already reported",
                                   detail=f"Matches your open ticket {dup.ticket.ticket_number} "
                                          f"({dup.similarity * 100:.0f}% similar)", agent_run_id=run.id)
         run.routing_level = "L2_similarity"
@@ -189,7 +189,7 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
     if corr.incident is not None:
         inc = corr.incident
         _decide(run, f"Correlated into {inc.incident_number}")
-        await ticket_svc.add_step(db, ticket, step_key="check_duplicate", title="Incident correlation",
+        await ticket_svc.add_step(db, ticket, step_key="check_duplicate", title="Linked to a known problem",
                                   detail=f"Linked to {inc.incident_number}: {inc.title}", agent_run_id=run.id)
         run.routing_level = "L2_similarity"
         await db.refresh(ticket)
@@ -208,7 +208,7 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
         alerts.append({"type": "info", "message": (
             f"{corr.similar_recent_count} other employee(s) reported a similar {ticket.category_name} issue in the "
             f"last {settings.INCIDENT_WINDOW_MINUTES} minutes. IT is being notified if more reports arrive.")})
-    await ticket_svc.add_step(db, ticket, step_key="check_duplicate", title="Duplicate & incident check",
+    await ticket_svc.add_step(db, ticket, step_key="check_duplicate", title="Checked for similar reports",
                               detail="No duplicate or active incident found"
                                      + (f"; {corr.similar_recent_count} similar recent report(s)"
                                         if corr.similar_recent_count else ""), agent_run_id=run.id)
@@ -226,7 +226,7 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
                            "similarity": round(h.similarity, 3)} for h in retrieval.similar_tickets[:3]]
     best = retrieval.solutions[0] if retrieval.solutions else None
     await ticket_svc.add_step(
-        db, ticket, step_key="search_history", title="Vector similarity search",
+        db, ticket, step_key="search_history", title="Searched past fixes and articles",
         detail=(f"{len(retrieval.solutions)} known solution(s), {len(retrieval.chunks)} KB section(s), "
                 f"{len(retrieval.similar_tickets)} similar ticket(s)"
                 + (f"; best match {best.source_ticket_number or 'SOL-' + str(best.solution.id)} "
@@ -294,7 +294,7 @@ async def _run_diagnostics(db: AsyncSession, run: AgentRun, ticket: Ticket) -> l
         evidence.append({"tool": tool_name, "ok": res.get("ok"), "summary": res.get("summary", ""),
                          "status": action.status})
         if action.status in ("executed", "failed"):
-            await ticket_svc.add_step(db, ticket, step_key="troubleshoot", title=f"Probe: {_tool_label(tool_name)}",
+            await ticket_svc.add_step(db, ticket, step_key="troubleshoot", title=f"Checked: {_tool_label(tool_name)}",
                                       detail=res.get("summary", ""), status="completed" if res.get("ok") else "failed",
                                       agent_run_id=run.id)
     ctx = _ctx(run)
@@ -377,16 +377,15 @@ async def _present(db: AsyncSession, run: AgentRun, ticket: Ticket, cand: Candid
                                 if "application" in spec.params else {})
         approvals.append(action_view(action))
     if approvals:
-        alerts.append({"type": "approval", "message": "Human approval required before executing this action."})
+        alerts.append({"type": "approval", "message": "Your approval is needed before this runs."})
 
-    label = cand.label
     if cand.kind == "solution" and cand.label in ("VERIFIED SOLUTION", "HUMAN-APPROVED SOLUTION"):
-        alerts.append({"type": "success", "message": "Known verified solution found."})
+        alerts.append({"type": "success", "message": "IT has a verified fix for this problem."})
     await ticket_svc.add_step(
         db, ticket, step_key="troubleshoot",
-        title=f"Remediation {'retrieved' if cand.kind in ('solution', 'kb_procedure') else 'generated'}",
-        detail=f"{label}: {cand.title} ({', '.join(cand.sources) or cand.model or 'n/a'})", agent_run_id=run.id)
-    await ticket_svc.add_step(db, ticket, step_key="verify", title="Verification",
+        title="Fix found" if cand.kind in ("solution", "kb_procedure") else "Fix suggested",
+        detail=f"{cand.title} ({', '.join(cand.sources) or cand.model or 'no source'})", agent_run_id=run.id)
+    await ticket_svc.add_step(db, ticket, step_key="verify", title="Waiting for confirmation",
                               detail="Waiting for the employee to confirm whether the fix worked",
                               status="running", performed_by="user", agent_run_id=run.id)
     _move(run, S.VERIFY)
@@ -397,12 +396,12 @@ async def _present(db: AsyncSession, run: AgentRun, ticket: Ticket, cand: Candid
 
     payload["solution"] = cand.as_dict()
     payload["approvals"] = approvals
-    source = (f" from **{cand.source_ticket}**" if cand.source_ticket else "")
+    source = (f" in **{cand.source_ticket}**" if cand.source_ticket else "")
     intro = {
-        "solution": f"I found a **{label.lower()}**{source} that matches your issue "
+        "solution": f"This looks like a problem IT has fixed before{source} "
                     f"({(cand.similarity or cand.confidence) * 100:.0f}% match).",
         "kb_procedure": "I found the documented procedure for this in the IT knowledge base.",
-        "ai_grounded": "Based on our IT documentation, here is a suggested fix (AI-generated, grounded in "
+        "ai_grounded": "Based on our IT documentation, here is a suggested fix (written by AI from "
                        f"{', '.join(cand.sources)}).",
         "ai_generated": "No documented fix matched, so here is an AI-generated suggestion with low-risk checks. "
                         "If it doesn't help, I'll hand this to a specialist.",
@@ -436,7 +435,7 @@ async def handle_feedback(db: AsyncSession, ticket: Ticket, user: User, resolved
     _save(run, ctx)
     run.attempt += 1
     _decide(run, f"Attempt {run.attempt} ({cand.label}) did not resolve the issue")
-    await ticket_svc.add_step(db, ticket, step_key="verify", title="Verification failed",
+    await ticket_svc.add_step(db, ticket, step_key="verify", title="Fix did not work",
                               detail=f"Employee reported that '{cand.title}' did not fix the issue"
                                      + (f": {comment}" if comment else ""), status="failed", performed_by="user",
                               agent_run_id=run.id)
@@ -461,10 +460,10 @@ async def handle_feedback(db: AsyncSession, ticket: Ticket, user: User, resolved
 async def _resolve(db: AsyncSession, run: AgentRun, ticket: Ticket, user: User, cand: Candidate,
                    sol: Optional[TicketSolution]) -> AgentOutcome:
     ticket.resolved_by_ai = True
-    ticket.resolution_summary = f"{cand.label}: {cand.title}"
+    ticket.resolution_summary = f"Resolved with {cand.title}"
     await ticket_svc.set_status(db, ticket, TicketStatus.RESOLVED, user_id=user.id,
                                 description="Employee confirmed the suggested fix worked")
-    await ticket_svc.add_step(db, ticket, step_key="verify", title="Verification passed",
+    await ticket_svc.add_step(db, ticket, step_key="verify", title="Fix confirmed",
                               detail="Employee confirmed the issue is resolved", performed_by="user",
                               agent_run_id=run.id)
     # Self-improving loop: AI suggestions become USER_CONFIRMED knowledge candidates; existing
@@ -497,7 +496,7 @@ async def _escalate(db: AsyncSession, run: AgentRun, ticket: Ticket, reason: str
     # verification "ran" (and failed) if the user was already asked to confirm a fix
     _progress(run, "verify", "done" if progress.get("verify") == "running" else "skipped")
     esc = await escalation.escalate(db, ticket, reason=reason, run=run)
-    await ticket_svc.add_step(db, ticket, step_key="escalate", title="Escalated to human support",
+    await ticket_svc.add_step(db, ticket, step_key="escalate", title="Passed to IT staff",
                               detail=f"{esc.department.name}: {reason}", agent_run_id=run.id)
     _progress(run, "outcome", "done")
     await _finish(db, run, S.ESCALATED, "escalated")

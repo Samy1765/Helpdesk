@@ -31,10 +31,11 @@ def _eval_texts() -> list[str]:
 
 def _corpus() -> dict[str, str]:
     files = sorted((DATA / "knowledge").glob("*.md")) + sorted((DATA / "seed").glob("*.json"))
+    files.append(PROJECT_DIR / "backend" / "app" / "database" / "demo_data.py")
     return {f.name: f.read_text(encoding="utf-8") for f in files}
 
 
-def test_no_evaluation_text_in_seed_or_knowledge():
+def test_no_evaluation_text_in_seed_knowledge_or_demo_data():
     corpus = {name: _shingles(text) for name, text in _corpus().items()}
     leaks = []
     for text in _eval_texts():
@@ -56,3 +57,38 @@ def test_runbooks_have_valid_metadata_and_steps():
         seen_categories.add(meta["category"])
         assert re.search(r"^\d+\. ", body, re.M), f"{path.name} has no numbered steps"
     assert seen_categories == set(CATEGORY_DEPARTMENT)
+
+
+async def test_demo_organisation_is_consistent(tmp_path):
+    """Seed the 90-day demo organisation into its own database (the shared test DB stays untouched)."""
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.database import Base
+    from app.database.demo_data import seed_demo_org
+    from app.database.seed import seed_history, seed_knowledge, seed_reference
+    from app.models import Incident, Ticket, TicketStatus, User
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{(tmp_path / 'demo.db').as_posix()}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+        ref = await seed_reference(db)
+        await seed_knowledge(db, ref["categories"], ref["users"]["admin"])
+        await seed_history(db, ref)
+        counts = await seed_demo_org(db, ref)
+        await db.commit()
+        assert counts["employees_added"] == 45 and counts["incidents"] == 4 and counts["verified_fixes"] >= 10
+        assert counts["resolved_by_assistant"] > 50 and counts["resolved_by_it"] > 50
+
+        tickets = (await db.execute(select(Ticket).order_by(Ticket.created_at, Ticket.id))).unique().scalars().all()
+        assert len(tickets) > 300
+        assert [t.ticket_number for t in tickets] == [f"INC-{i:06d}" for i in range(1, len(tickets) + 1)]
+        for t in tickets:
+            if t.status == TicketStatus.RESOLVED:
+                assert t.resolved_at is not None and t.resolved_at >= t.created_at, t.ticket_number
+        assert (await db.execute(select(func.count(Incident.id)).where(Incident.status == "resolved"))).scalar() == 4
+        emails = (await db.execute(select(User.email))).scalars().all()
+        assert all(e.endswith("@example.com") for e in emails)
+        assert await seed_demo_org(db, ref) == {}  # idempotent
+    await engine.dispose()
