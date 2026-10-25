@@ -28,6 +28,29 @@ ALLOWED_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif",
                  "application/pdf": ".pdf", "text/plain": ".txt"}
 
 
+def content_matches_type(data: bytes, content_type: str) -> bool:
+    """Check the file's leading bytes against its declared type; the client's Content-Type is not trusted."""
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if content_type == "image/gif":
+        return data[:6] in (b"GIF87a", b"GIF89a")
+    if content_type == "image/webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    if content_type == "application/pdf":
+        return data.startswith(b"%PDF-")
+    if content_type == "text/plain":
+        if b"\x00" in data[:8192]:
+            return False
+        try:
+            data[:8192].decode("utf-8")
+        except UnicodeDecodeError as exc:
+            return exc.start >= 8188  # a multi-byte character cut off at the sample boundary is fine
+        return True
+    return False
+
+
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     user_priority: Optional[Literal["low", "medium", "high", "critical"]] = None
@@ -90,6 +113,8 @@ async def upload(file: UploadFile = File(...), ticket_id: Optional[int] = Form(N
     data = await file.read(settings.MAX_UPLOAD_MB * 1024 * 1024 + 1)
     if len(data) > settings.MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, f"Max {settings.MAX_UPLOAD_MB} MB")
+    if not data or not content_matches_type(data, file.content_type or ""):
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "File content does not match its type")
     token = secrets.token_urlsafe(24)
     folder = Path(settings.UPLOAD_DIR)
     folder.mkdir(parents=True, exist_ok=True)
@@ -114,4 +139,7 @@ async def download(token: str, db: AsyncSession = Depends(get_db), user: User = 
     att = (await db.execute(select(Attachment).where(Attachment.token == token))).scalar_one_or_none()
     if att is None or (att.user_id != user.id and not is_staff(user)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Attachment not found")
-    return FileResponse(att.storage_path, media_type=att.content_type, filename=att.filename)
+    path = Path(att.storage_path).resolve()
+    if Path(settings.UPLOAD_DIR).resolve() not in path.parents or not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Attachment not found")
+    return FileResponse(path, media_type=att.content_type, filename=att.filename)

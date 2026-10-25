@@ -9,7 +9,7 @@ from typing import Optional
 import bcrypt
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 
 from app.core.config import get_settings
 
@@ -48,7 +48,7 @@ def decode_token(token: str, expected_type: str = "access") -> dict:
     """Decode and validate a JWT; rejects tokens of the wrong type (e.g. refresh used as access)."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-    except JWTError:
+    except jwt.PyJWTError:
         payload = None
     if not payload or payload.get("type") != expected_type:
         raise HTTPException(

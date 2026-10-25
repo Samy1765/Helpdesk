@@ -23,7 +23,7 @@ from app.models.ticket import SolutionConfidence, Ticket
 from app.rag.retriever import ChunkHit, Retrieval, SolutionHit
 from app.services.knowledge import steps_from_text
 from app.tools.registry import get_tool
-from app.tools.safety import filter_steps, screen_text
+from app.tools.safety import UNTRUSTED_NOTE, filter_steps, screen_text, wrap_untrusted
 
 logger = get_logger(__name__)
 
@@ -96,6 +96,7 @@ SYSTEM_GROUNDED = (
     "disabling security software, deleting system files, editing the registry or running admin commands. "
     "If the context does not cover the issue, set can_resolve to false. Respond ONLY with JSON: "
     '{"summary": "...", "steps": ["..."], "sources": ["KB-1"], "confidence": 0-1, "can_resolve": true}'
+    + UNTRUSTED_NOTE
 )
 
 SYSTEM_UNGROUNDED = (
@@ -104,14 +105,15 @@ SYSTEM_UNGROUNDED = (
     "update). Never ask for passwords or MFA codes, never suggest disabling security software, deleting "
     "files, editing the registry or running admin commands. If unsure, set can_resolve to false. "
     'Respond ONLY with JSON: {"summary": "...", "steps": ["..."], "sources": [], "confidence": 0-1, '
-    '"can_resolve": true}'
+    '"can_resolve": true}' + UNTRUSTED_NOTE
 )
 
 
 def _issue_block(ticket: Ticket, previous: list[Candidate], evidence: list[dict]) -> str:
-    lines = [f"Ticket: {ticket.title}", f"Category: {ticket.category_name}", f"Description: {ticket.description[:1500]}"]
+    reported = f"Title: {ticket.title}\nDescription: {ticket.description[:1500]}"
     if ticket.entities:
-        lines.append("Details: " + ", ".join(f"{k}={v}" for k, v in ticket.entities.items()))
+        reported += "\nDetails: " + ", ".join(f"{k}={v}" for k, v in ticket.entities.items())
+    lines = [f"Category: {ticket.category_name}", "Reported issue:", wrap_untrusted(reported)]
     if evidence:
         lines.append("Automated check results: " + "; ".join(f"{e['tool']}: {e['summary']}" for e in evidence[:6]))
     if previous:

@@ -58,9 +58,39 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
+
+# The SPA is served from this origin and loads nothing from third parties. Charts set inline styles,
+# hence 'unsafe-inline' for styles only. Swagger/ReDoc pull their bundles from a CDN, so they get no CSP.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+    "font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > settings.MAX_REQUEST_MB * 1024 * 1024:
+        return JSONResponse(status_code=413, content={"detail": f"Request body exceeds {settings.MAX_REQUEST_MB} MB"})
+    response = await call_next(request)
+    headers = response.headers
+    headers.setdefault("X-Content-Type-Options", "nosniff")
+    headers.setdefault("X-Frame-Options", "DENY")
+    headers.setdefault("Referrer-Policy", "same-origin")
+    headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if not request.url.path.startswith(DOCS_PATHS):
+        headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+    if request.url.path.startswith("/api/"):
+        headers.setdefault("Cache-Control", "no-store")
+    if settings.is_production:
+        headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 
 @app.middleware("http")

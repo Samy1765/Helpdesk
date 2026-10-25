@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../hooks/useApi";
-import { api } from "../services/api";
+import { api, tokens } from "../services/api";
 import { Avatar, Badge, ErrorNote, Field, KeyValue, PageHeader, shortDate, titleCase } from "../components/ui";
 
 export default function ProfilePage() {
@@ -25,7 +25,13 @@ export default function ProfilePage() {
   };
   const changePw = async (e: FormEvent) => {
     e.preventDefault(); setMsg(null); setErr(null);
-    try { await api.post("/auth/change-password", pw); setPw({ current_password: "", new_password: "" }); setMsg("Password changed"); }
+    try {
+      // The server signs out every other session and returns fresh tokens for this one.
+      const r = await api.post<{ access_token: string; refresh_token: string }>("/auth/change-password", pw);
+      tokens.set(r.access_token, r.refresh_token);
+      setPw({ current_password: "", new_password: "" });
+      setMsg("Password changed. Other devices have been signed out.");
+    }
     catch (e2) { setErr(e2 instanceof Error ? e2.message : "Failed"); }
   };
 

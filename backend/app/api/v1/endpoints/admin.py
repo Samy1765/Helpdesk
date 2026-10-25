@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.serializers import iso, user_out
+from app.api.v1.endpoints.auth import revoke_tokens
 from app.core.config import get_settings
 from app.core.deps import require_role
 from app.database import get_db
@@ -60,11 +61,19 @@ async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends
     if target.id == admin.id and (data.role not in (None, "admin") or data.is_active is False):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot demote or deactivate yourself")
     changes = data.model_dump(exclude_unset=True)
-    if data.role:
+    revoke_reason = None
+    if data.role and data.role != target.role_name:
         role = (await db.execute(select(Role).where(Role.name == data.role))).scalar_one()
+        await ticket_svc.audit(db, "role_changed", user_id=admin.id, resource_type="user", resource_id=target.id,
+                               details={"from": target.role_name, "to": data.role})
         target.role_id = role.id
+        revoke_reason = "role_changed"  # tokens carry the role, so make the user sign in again
     if data.is_active is not None:
+        if target.is_active and not data.is_active:
+            revoke_reason = "deactivated"
         target.is_active = data.is_active
+    if revoke_reason:
+        await revoke_tokens(db, target, revoke_reason, actor_id=admin.id)
     if "department_id" in changes:
         target.department_id = data.department_id
     await ticket_svc.audit(db, "user_updated", user_id=admin.id, resource_type="user", resource_id=target.id,

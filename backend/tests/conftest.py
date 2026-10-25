@@ -21,6 +21,8 @@ os.environ.update({
     "AGENT_TOOLS_ENABLED": "false",
     "SERVE_FRONTEND": "false",
     "LOG_LEVEL": "WARNING",
+    # Tests register many users from one client address; the limiter itself is tested with a lower limit.
+    "AUTH_RATE_LIMIT_PER_MINUTE": "100000",
     "EMBEDDING_BACKEND": "sentence-transformers",
 })
 

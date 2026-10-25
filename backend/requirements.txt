@@ -10,7 +10,7 @@ aiosqlite>=0.20
 alembic>=1.13
 
 # Auth
-python-jose[cryptography]>=3.3
+PyJWT>=2.10
 bcrypt>=4.1
 email-validator>=2.1
 

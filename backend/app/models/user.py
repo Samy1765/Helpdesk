@@ -44,6 +44,11 @@ class User(Base):
     location: Mapped[Optional[str]] = mapped_column(String(150))
     is_active: Mapped[bool] = mapped_column(default=True)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Brute-force protection: consecutive failed logins and the time a temporary lock ends.
+    failed_login_count: Mapped[int] = mapped_column(default=0, server_default="0")
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Embedded in every JWT; bumping it (logout, password change, deactivation) revokes all issued tokens.
+    token_version: Mapped[int] = mapped_column(default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Brute-force protection: lock an account after N consecutive failures, and cap auth attempts per IP.
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_LOCKOUT_MINUTES: int = 15
+    AUTH_RATE_LIMIT_PER_MINUTE: int = 10
+    # Reject request bodies larger than this (attachments are additionally capped by MAX_UPLOAD_MB)
+    MAX_REQUEST_MB: int = 6
 
     # Database. PostgreSQL is the primary target; SQLite is supported for local dev/tests.
     DATABASE_URL: str = "postgresql+asyncpg://precision_user:precision_pass@localhost:5432/precision_ai"
@@ -154,6 +160,6 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached settings instance."""
     settings = Settings()
-    if settings.is_production and settings.SECRET_KEY.startswith("dev-"):
-        raise RuntimeError("SECRET_KEY must be set to a strong random value in production")
+    if settings.is_production and (settings.SECRET_KEY.startswith(("dev-", "change-me")) or len(settings.SECRET_KEY) < 32):
+        raise RuntimeError("SECRET_KEY must be set to a strong random value (32+ characters) in production")
     return settings

@@ -4,6 +4,8 @@ Passwords are bcrypt-hashed; JWT access tokens are short-lived, refresh tokens l
 """
 
 import re
+from datetime import timedelta, timezone
+from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,8 +15,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.serializers import user_out
+from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.core.logging import get_logger
+from app.core.rate_limit import client_ip, limit_auth_attempts
 from app.core.security import (
     create_access_token, create_refresh_token, decode_token, hash_password, verify_password,
 )
@@ -25,6 +29,11 @@ from app.services.tickets import audit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = get_logger(__name__)
+settings = get_settings()
+
+# One message for unknown user, wrong password and locked account, so responses do not reveal which it was.
+LOGIN_FAILED = (f"Invalid username or password. After {settings.LOGIN_MAX_FAILURES} failed attempts the account "
+                f"is locked for {settings.LOGIN_LOCKOUT_MINUTES} minutes.")
 
 
 def _password_policy(v: str) -> str:
@@ -81,27 +90,65 @@ class PasswordIn(BaseModel):
 
 
 def _tokens(user: User) -> dict:
-    data = {"sub": str(user.id), "role": user.role_name}
+    data = {"sub": str(user.id), "role": user.role_name, "ver": user.token_version}
     return {"access_token": create_access_token(data), "refresh_token": create_refresh_token(data),
             "token_type": "bearer", "user": user_out(user)}
+
+
+@lru_cache(maxsize=1)
+def _dummy_hash() -> str:
+    return hash_password("timing-equaliser-not-a-password")
+
+
+def _aware(dt):
+    return dt if dt is None or dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+async def revoke_tokens(db: AsyncSession, user: User, reason: str, actor_id: Optional[int] = None) -> None:
+    """Invalidate every access and refresh token issued to `user` so far."""
+    user.token_version = (user.token_version or 0) + 1
+    await audit(db, "token_revoked", user_id=actor_id or user.id, resource_type="user", resource_id=user.id,
+                details={"reason": reason})
 
 
 async def _authenticate(db: AsyncSession, identifier: str, password: str, request: Request) -> User:
     ident = identifier.strip().lower()
     user = (await db.execute(select(User).where(or_(User.username == ident, User.email == ident)))).unique().scalar_one_or_none()
-    ip = request.client.host if request.client else None
-    if not user or not verify_password(password, user.password_hash):
-        await audit(db, "login_failed", resource_type="user", resource_id=user.id if user else None, ip_address=ip)
+    ip = client_ip(request)
+    now = utcnow()
+    if user is None:
+        verify_password(password, _dummy_hash())  # same bcrypt cost as a real check
+        await audit(db, "login_failed", resource_type="user", ip_address=ip, details={"reason": "unknown_user"})
         await db.commit()
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, LOGIN_FAILED)
+    locked_until = _aware(user.locked_until)
+    if locked_until and locked_until > now:
+        await audit(db, "login_failed", resource_type="user", resource_id=user.id, ip_address=ip,
+                    details={"reason": "locked"})
+        await db.commit()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, LOGIN_FAILED)
+    if not verify_password(password, user.password_hash):
+        user.failed_login_count = (user.failed_login_count or 0) + 1
+        await audit(db, "login_failed", resource_type="user", resource_id=user.id, ip_address=ip,
+                    details={"reason": "bad_password", "consecutive": user.failed_login_count})
+        if user.failed_login_count >= settings.LOGIN_MAX_FAILURES:
+            user.locked_until = now + timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES)
+            user.failed_login_count = 0
+            await audit(db, "account_locked", resource_type="user", resource_id=user.id, ip_address=ip,
+                        details={"minutes": settings.LOGIN_LOCKOUT_MINUTES})
+            logger.warning("account_locked", user_id=user.id)
+        await db.commit()
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, LOGIN_FAILED)
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is deactivated")
-    user.last_login_at = utcnow()
+    user.failed_login_count = 0
+    user.locked_until = None
+    user.last_login_at = now
     await audit(db, "login", user_id=user.id, resource_type="user", resource_id=user.id, ip_address=ip)
     return user
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_auth_attempts)])
 async def register(data: RegisterIn, request: Request, db: AsyncSession = Depends(get_db)):
     """Self-registration always creates an EMPLOYEE account; roles are granted by administrators."""
     exists = (await db.execute(select(User.id).where(or_(User.email == data.email.lower(),
@@ -120,33 +167,39 @@ async def register(data: RegisterIn, request: Request, db: AsyncSession = Depend
     await db.flush()
     await db.refresh(user)
     await audit(db, "register", user_id=user.id, resource_type="user", resource_id=user.id,
-                ip_address=request.client.host if request.client else None)
+                ip_address=client_ip(request))
     logger.info("user_registered", user_id=user.id)
     return _tokens(user)
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(limit_auth_attempts)])
 async def login(data: LoginIn, request: Request, db: AsyncSession = Depends(get_db)):
     return _tokens(await _authenticate(db, data.username, data.password, request))
 
 
-@router.post("/token", include_in_schema=True, summary="OAuth2 password flow (used by Swagger 'Authorize')")
+@router.post("/token", dependencies=[Depends(limit_auth_attempts)], include_in_schema=True, summary="OAuth2 password flow (used by Swagger 'Authorize')")
 async def token(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     return _tokens(await _authenticate(db, form.username, form.password, request))
 
 
 @router.post("/refresh")
 async def refresh(data: RefreshIn, db: AsyncSession = Depends(get_db)):
+    """Exchange a refresh token for a new token pair. Tokens issued before the last logout,
+    password change or deactivation are rejected."""
     payload = decode_token(data.refresh_token, "refresh")
-    user = await db.get(User, int(payload["sub"]))
-    if not user or not user.is_active:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
+    try:
+        user = await db.get(User, int(payload["sub"]))
+    except (KeyError, TypeError, ValueError):
+        user = None
+    if not user or not user.is_active or payload.get("ver", 0) != user.token_version:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session has ended, please sign in again")
     return _tokens(user)
 
 
 @router.post("/logout")
 async def logout(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """JWTs are stateless: the client discards its tokens. The logout is recorded for auditing."""
+    """Revokes every token issued to this user (all signed-in browsers), then records the logout."""
+    await revoke_tokens(db, current_user, "logout")
     await audit(db, "logout", user_id=current_user.id, resource_type="user", resource_id=current_user.id)
     return {"message": "Logged out"}
 
@@ -173,4 +226,7 @@ async def change_password(data: PasswordIn, current_user: User = Depends(get_cur
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
     current_user.password_hash = hash_password(data.new_password)
     await audit(db, "password_changed", user_id=current_user.id, resource_type="user", resource_id=current_user.id)
-    return {"message": "Password updated"}
+    await revoke_tokens(db, current_user, "password_changed")
+    await db.flush()
+    # Other sessions are signed out; this one continues with fresh tokens.
+    return {"message": "Password updated", **_tokens(current_user)}
