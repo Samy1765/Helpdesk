@@ -146,7 +146,8 @@ async def seed_knowledge(db, cats: dict, admin: User | None) -> int:
     if (await db.execute(select(func.count(KnowledgeDocument.id)))).scalar():
         return 0
     n = 0
-    for path in sorted((DATA / "knowledge").glob("*.md")):
+    # The general runbook of each category (e.g. vpn.md) first, then the topic-specific ones (vpn-*.md)
+    for path in sorted((DATA / "knowledge").glob("*.md"), key=lambda p: ("-" in p.stem, p.name)):
         meta, body = parse_front_matter(path.read_text(encoding="utf-8"))
         cat = cats.get(meta.get("category", ""))
         await knowledge.create_document(db, title=meta.get("title", path.stem), content=body,

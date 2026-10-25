@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ErrorNote, Field } from "../components/ui";
 import AuthShell from "./AuthShell";
 
 const DEMO = [
-  { label: "Employee", username: "johndoe", password: "Employee@123" },
-  { label: "IT Support", username: "itsupport", password: "Support@123" },
-  { label: "Admin", username: "admin", password: "Admin@123" },
+  { label: "Employee", who: "John Doe, Engineering", username: "johndoe", password: "Employee@123" },
+  { label: "IT support agent", who: "Alex Kumar, Network Team", username: "itsupport", password: "Support@123" },
+  { label: "Administrator", who: "Morgan Admin, IT Operations", username: "admin", password: "Admin@123" },
 ];
 
 export default function LoginPage() {
@@ -35,7 +35,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell title="Sign in" subtitle="Use your company account to reach the IT support agent.">
+    <AuthShell title="Sign in" subtitle="Use your company username or email address.">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Username or email">
           <input className="input" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
@@ -45,18 +45,22 @@ export default function LoginPage() {
         </Field>
         <ErrorNote message={error} />
         <button className="btn-accent w-full" disabled={busy}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <>Sign in <ArrowRight className="size-4" /></>}
+          {busy ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
         </button>
       </form>
       <p className="text-sm text-meta mt-5">New here? <Link to="/register" className="text-cobalt font-medium hover:underline">Create an account</Link></p>
 
-      <div className="mt-8 card">
-        <div className="card-header"><span className="label-caps">Demo accounts (local seed data)</span></div>
-        <div className="p-2 grid gap-1">
+      <div className="mt-8 border-t border-line pt-5">
+        <p className="text-sm font-medium">Demo accounts</p>
+        <p className="text-xs text-meta mt-0.5 mb-2">Sample data for this demonstration. Select one to fill in the form.</p>
+        <div className="grid gap-1">
           {DEMO.map((d) => (
-            <button key={d.username} type="button" className="flex items-center justify-between rounded px-2.5 py-2 text-left hover:bg-canvas"
+            <button key={d.username} type="button" className="flex items-center justify-between gap-3 rounded border border-line px-3 py-2 text-left hover:bg-canvas hover:border-line-strong"
               onClick={() => { setUsername(d.username); setPassword(d.password); }}>
-              <span className="text-sm font-medium">{d.label}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">{d.label}</span>
+                <span className="block text-xs text-meta truncate">{d.who}</span>
+              </span>
               <span className="mono text-xs text-meta">{d.username}</span>
             </button>
           ))}

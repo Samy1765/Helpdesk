@@ -19,6 +19,10 @@ from app.models.user import User
 
 logger = get_logger(__name__)
 
+# How a ticket arrived, as shown in its history
+SOURCE_TEXT = {"ai_chatbot": "through the chat assistant", "portal": "through the ticket form",
+               "historical_import": "(imported from the previous system)", "demo_seed": "(sample data)"}
+
 
 async def create_ticket(
     db: AsyncSession,
@@ -58,7 +62,7 @@ async def create_ticket(
     await db.flush()
     ticket.ticket_number = f"INC-{ticket.id:06d}"  # sequential, derived from the PK
     await add_event(db, ticket, "ticket_created", user_id=user.id, new_value=ticket.status,
-                    description=f"Ticket created via {source}")
+                    description=f"Reported {SOURCE_TEXT.get(source, 'via ' + source)}")
     await db.flush()
     await db.refresh(ticket)
     logger.info("ticket_created", ticket_id=ticket.id, ticket_number=ticket.ticket_number,

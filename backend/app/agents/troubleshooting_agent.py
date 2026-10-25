@@ -392,7 +392,7 @@ async def _present(db: AsyncSession, run: AgentRun, ticket: Ticket, cand: Candid
     _move(run, S.VERIFY)
     _progress(run, "troubleshoot", "done")
     _progress(run, "verify", "running")
-    await ticket_svc.set_status(db, ticket, TicketStatus.AWAITING_USER, description="Solution proposed")
+    await ticket_svc.set_status(db, ticket, TicketStatus.AWAITING_USER, description="Fix suggested to the employee")
     await _sync_usage(db, run)
 
     payload["solution"] = cand.as_dict()
@@ -463,7 +463,7 @@ async def _resolve(db: AsyncSession, run: AgentRun, ticket: Ticket, user: User, 
     ticket.resolved_by_ai = True
     ticket.resolution_summary = f"{cand.label}: {cand.title}"
     await ticket_svc.set_status(db, ticket, TicketStatus.RESOLVED, user_id=user.id,
-                                description="Employee confirmed the AI-proposed fix worked")
+                                description="Employee confirmed the suggested fix worked")
     await ticket_svc.add_step(db, ticket, step_key="verify", title="Verification passed",
                               detail="Employee confirmed the issue is resolved", performed_by="user",
                               agent_run_id=run.id)

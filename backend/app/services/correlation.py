@@ -66,7 +66,7 @@ async def mark_duplicate(db: AsyncSession, ticket: Ticket, original: Ticket, sim
     ticket.duplicate_of_id = original.id
     ticket.extra_data = {**(ticket.extra_data or {}), "duplicate_similarity": round(similarity, 3)}
     await ticket_svc.set_status(db, ticket, TicketStatus.DUPLICATE,
-                                description=f"Duplicate of {original.ticket_number} (similarity {similarity:.2f})")
+                                description=f"Same problem as {original.ticket_number} ({similarity:.0%} similar)")
     await ticket_svc.add_event(db, original, "duplicate_linked", new_value=ticket.ticket_number,
                                description=f"{ticket.ticket_number} was reported again by the same user")
 
@@ -159,10 +159,10 @@ async def _link(db: AsyncSession, inc: Incident, t: Ticket, similarity: float, *
     t.incident_id = inc.id
     t.department_id = t.department_id or inc.department_id
     await ticket_svc.add_event(db, t, "linked_to_incident", new_value=inc.incident_number,
-                               description=f"Correlated with {inc.incident_number} (similarity {similarity:.2f})")
+                               description=f"Grouped into {inc.incident_number} ({similarity:.0%} similar)")
     if t.status in IN_AI_FLOW:
         await ticket_svc.set_status(db, t, TicketStatus.LINKED_INCIDENT,
-                                    description=f"Handled as part of {inc.incident_number}")
+                                    description=f"Now handled as part of {inc.incident_number}")
         if is_current:
             return
         # stop in-flight troubleshooting for this ticket: the incident owns it now

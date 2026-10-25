@@ -156,7 +156,7 @@ TOOLS: dict[str, ToolSpec] = {t.name: t for t in [
              client_environment, params=("client",)),
 
     ToolSpec("flush_dns_cache", RESTRICTED, "Flush DNS cache", "Clear the resolver cache on the user's device",
-             approver_role="requester", risk_note="Idempotent; no data loss"),
+             approver_role="requester", risk_note="Safe to repeat; nothing is deleted"),
     ToolSpec("restart_vpn_client_service", RESTRICTED, "Restart VPN client service",
              "Restart the VPN agent on the user's device", approver_role="requester",
              risk_note="Drops any active VPN session for ~10 seconds"),
@@ -170,12 +170,12 @@ TOOLS: dict[str, ToolSpec] = {t.name: t for t in [
              "Send a self-service reset link to the user's registered recovery channel",
              approver_role="requester", risk_note="Existing sessions stay active until reset"),
     ToolSpec("unlock_account", RESTRICTED, "Unlock account", "Clear an account lockout in the directory",
-             approver_role="requester", risk_note="Only after identity is confirmed by SSO session"),
+             approver_role="requester", risk_note="Only after your identity is confirmed by single sign-on"),
 
     ToolSpec("delete_user_profile", DANGEROUS, "Delete local user profile",
              "Remove the local profile from a device", approver_role="admin", risk_note="Irreversible data loss"),
     ToolSpec("modify_production_database", DANGEROUS, "Modify production database",
-             "Change data or schema in production", approver_role="admin", risk_note="Production impact"),
+             "Change data or schema in production", approver_role="admin", risk_note="Affects live business data"),
     ToolSpec("disable_security_controls", DANGEROUS, "Disable security controls",
              "Turn off endpoint protection or firewall", approver_role="admin", risk_note="Security exposure"),
     ToolSpec("reimage_device", DANGEROUS, "Re-image device", "Wipe and reinstall the OS",

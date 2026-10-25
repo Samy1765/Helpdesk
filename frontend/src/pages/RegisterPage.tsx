@@ -30,7 +30,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthShell title="Create account" subtitle="Employee accounts can chat with the agent and track their tickets.">
+    <AuthShell title="Create account" subtitle="New accounts are created as employees. IT staff roles are granted by an administrator.">
       <form onSubmit={submit} className="space-y-3.5">
         <Field label="Full name"><input className="input" value={form.full_name} onChange={set("full_name")} required minLength={2} /></Field>
         <Field label="Work email"><input className="input" type="email" value={form.email} onChange={set("email")} required /></Field>

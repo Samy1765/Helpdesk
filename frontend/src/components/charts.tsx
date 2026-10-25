@@ -1,15 +1,16 @@
 /**
- * Chart primitives (dataviz method): validated categorical slots (#2a78d6 / #eb6834 pass CVD + contrast
- * on white), 2px lines, <=24px bars with 4px rounded data-ends, solid hairline grid, legend only for >=2
- * series, hover tooltips, and a table view for every chart so no value is color- or hover-gated.
+ * Chart primitives: the brand blue for the first series and an orange for the second (distinguishable
+ * with common colour-vision deficiencies and readable on white), 2px lines, <=24px bars, hairline grid,
+ * legend only for >=2 series, hover tooltips, and a table view for every chart so no value is
+ * colour- or hover-gated.
  */
 import { useState, type ReactNode } from "react";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Table2, BarChart3 } from "lucide-react";
 
-export const SERIES = ["#2a78d6", "#eb6834"];
-const GRID = "#e2e8f0";
-const AXIS = "#64748b";
+export const SERIES = ["#1f4f9c", "#d0742c"];
+const GRID = "#e1e4e8";
+const AXIS = "#646b73";
 
 export function ChartCard({ title, subtitle, children, table, legend }:
   { title: string; subtitle?: string; children: ReactNode; table: { columns: string[]; rows: (string | number)[][] }; legend?: { label: string; color: string }[] }) {
@@ -18,7 +19,7 @@ export function ChartCard({ title, subtitle, children, table, legend }:
     <section className="card">
       <div className="card-header">
         <div className="min-w-0">
-          <p className="label-caps !text-ink">{title}</p>
+          <h3 className="text-sm font-semibold">{title}</h3>
           {subtitle && <p className="text-xs text-meta mt-0.5">{subtitle}</p>}
         </div>
         <button className="btn-ghost btn-sm" onClick={() => setAsTable((t) => !t)} aria-pressed={asTable}>
@@ -38,9 +39,9 @@ export function ChartCard({ title, subtitle, children, table, legend }:
         {asTable ? (
           <div className="max-h-72 overflow-auto scroll-thin">
             <table className="w-full text-sm">
-              <thead><tr>{table.columns.map((c) => <th key={c} className="label-caps text-left py-1.5 pr-3 border-b border-line">{c}</th>)}</tr></thead>
+              <thead><tr>{table.columns.map((c, j) => <th key={c} className={`py-1.5 pr-3 border-b border-line text-xs font-medium text-meta ${j ? "text-right" : "text-left"}`}>{c}</th>)}</tr></thead>
               <tbody>{table.rows.map((r, i) => (
-                <tr key={i} className="border-b border-muted">{r.map((v, j) => <td key={j} className={`py-1.5 pr-3 ${j ? "tabular-nums" : ""}`}>{v}</td>)}</tr>
+                <tr key={i} className="border-b border-muted">{r.map((v, j) => <td key={j} className={`py-1.5 pr-3 ${j ? "tabular-nums text-right" : ""}`}>{v}</td>)}</tr>
               ))}</tbody>
             </table>
           </div>
@@ -65,7 +66,7 @@ function TooltipBox({ active, payload, label, fmt }: { active?: boolean; payload
   );
 }
 
-const dayLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
+const dayLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
 export function TrendLines({ data, series }: { data: Record<string, string | number>[]; series: { key: string; label: string }[] }) {
   return (
@@ -75,7 +76,7 @@ export function TrendLines({ data, series }: { data: Record<string, string | num
           <CartesianGrid stroke={GRID} vertical={false} />
           <XAxis dataKey="date" tickFormatter={dayLabel} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={24} />
           <YAxis allowDecimals={false} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-          <Tooltip content={<TooltipBox fmt={dayLabel} />} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }} />
+          <Tooltip content={<TooltipBox fmt={dayLabel} />} cursor={{ stroke: "#c8cdd3", strokeWidth: 1 }} />
           {series.map((s, i) => (
             <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} strokeWidth={2}
               dot={false} activeDot={{ r: 4, stroke: "#ffffff", strokeWidth: 2 }} strokeLinecap="round" strokeLinejoin="round" />
@@ -94,7 +95,7 @@ export function GrowthArea({ data, dataKey, label }: { data: Record<string, stri
           <CartesianGrid stroke={GRID} vertical={false} />
           <XAxis dataKey="date" tickFormatter={dayLabel} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={24} />
           <YAxis allowDecimals={false} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-          <Tooltip content={<TooltipBox fmt={dayLabel} />} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }} />
+          <Tooltip content={<TooltipBox fmt={dayLabel} />} cursor={{ stroke: "#c8cdd3", strokeWidth: 1 }} />
           <Area type="monotone" dataKey={dataKey} name={label} stroke={SERIES[0]} strokeWidth={2} fill={SERIES[0]} fillOpacity={0.1}
             activeDot={{ r: 4, stroke: "#ffffff", strokeWidth: 2 }} />
         </AreaChart>
@@ -129,7 +130,7 @@ export function Meter({ value, label }: { value: number; label: string }) {
   return (
     <div>
       <div className="flex justify-between text-[0.8125rem] mb-1"><span className="text-body">{label}</span><span className="font-semibold text-ink">{value}%</span></div>
-      <div className="h-2 rounded-sm bg-[#cde2fb] overflow-hidden"><div className="h-full rounded-r-[4px]" style={{ width: `${Math.min(100, value)}%`, background: SERIES[0] }} /></div>
+      <div className="h-2 rounded-sm bg-cobalt-soft overflow-hidden"><div className="h-full rounded-r-[4px]" style={{ width: `${Math.min(100, value)}%`, background: SERIES[0] }} /></div>
     </div>
   );
 }

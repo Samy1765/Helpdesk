@@ -32,21 +32,21 @@ export default function TicketsPage() {
 
   return (
     <div>
-      <PageHeader title={isStaff ? "Ticket center" : "My tickets"}
-        subtitle={isStaff ? "Tickets assigned to you, escalated work and critical issues." : "Every issue you've raised, with live AI and IT status."}
-        right={<Link to="/chat" className="btn-accent"><MessageSquare className="size-4" /> New issue</Link>} />
+      <PageHeader title={isStaff ? "Tickets" : "My tickets"}
+        subtitle={isStaff ? "Tickets assigned to you, escalated work and anything critical." : "Everything you have reported and where it stands."}
+        right={<Link to="/chat" className="btn-accent"><MessageSquare className="size-4" /> Report a problem</Link>} />
 
       <div className="card p-3 mb-4 space-y-3">
         <div className="flex gap-1 overflow-x-auto">
           {SCOPES.map(([k, label]) => (
             <button key={k} onClick={() => update("scope", k === "default" ? "" : k)}
-              className={`rounded px-3 py-1.5 text-sm font-medium whitespace-nowrap ${scope === k ? "bg-ink text-white" : "text-body hover:bg-muted"}`}>{label}</button>
+              className={`rounded px-3 py-1.5 text-sm whitespace-nowrap ${scope === k ? "bg-cobalt-soft text-cobalt font-medium" : "text-body hover:bg-muted"}`}>{label}</button>
           ))}
         </div>
         <div className="grid gap-2 sm:grid-cols-[1fr_10rem_10rem]">
           <form onSubmit={(e) => { e.preventDefault(); update("q", q.trim()); }} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-faint" />
-            <input className="input pl-9" placeholder="Search INC number, title or description" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="input pl-9" placeholder="Search by ticket number or words in the title" value={q} onChange={(e) => setQ(e.target.value)} />
           </form>
           <select className="select" value={category} onChange={(e) => update("category", e.target.value)}>
             <option value="">All categories</option>
@@ -66,10 +66,10 @@ export default function TicketsPage() {
         <>
           <div className="hidden md:block card overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-canvas border-b border-line">
-                <tr className="text-left">
-                  {["ID", "Issue", "Category", "Status", "Priority", isStaff ? "Requester" : "Owner", "Updated"].map((h) => (
-                    <th key={h} className="label-caps px-4 py-2.5 font-semibold">{h}</th>
+              <thead>
+                <tr>
+                  {["Ticket", "Problem", "Category", "Status", "Priority", isStaff ? "Reported by" : "With", "Last update"].map((h) => (
+                    <th key={h} className="th !px-4">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -77,17 +77,15 @@ export default function TicketsPage() {
                 {data.items.map((t) => (
                   <tr key={t.id} className="h-11 hover:bg-canvas">
                     <td className="px-4 whitespace-nowrap">
-                      <span className="flex items-center gap-2">
-                        <span className={`dot size-1.5 ${t.sla.breached && t.is_open ? "bg-crit" : t.is_open ? "bg-ok" : "bg-faint"}`} title="SLA status" />
-                        <TicketId number={t.ticket_number} to={`/tickets/${t.id}`} />
-                      </span>
+                      <TicketId number={t.ticket_number} to={`/tickets/${t.id}`} />
+                      {t.sla.breached && t.is_open && <span className="ml-2 text-xs text-crit">overdue</span>}
                     </td>
                     <td className="px-4 max-w-80"><Link to={`/tickets/${t.id}`} className="font-medium hover:text-cobalt line-clamp-1">{t.title}</Link></td>
                     <td className="px-4 text-meta whitespace-nowrap">{t.category || "-"}</td>
                     <td className="px-4"><StatusBadge status={t.status} /></td>
                     <td className="px-4"><PriorityBadge priority={t.priority} /></td>
-                    <td className="px-4 text-meta whitespace-nowrap">{isStaff ? t.creator?.name : t.assignee?.name || (t.resolved_by_ai ? "AI agent" : t.department || "AI agent")}</td>
-                    <td className="px-4 mono text-xs text-meta whitespace-nowrap">{timeAgo(t.updated_at)}</td>
+                    <td className="px-4 text-meta whitespace-nowrap">{isStaff ? t.creator?.name : t.assignee?.name || (t.resolved_by_ai ? "Assistant" : t.department || "Assistant")}</td>
+                    <td className="px-4 text-xs text-meta whitespace-nowrap">{timeAgo(t.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -100,13 +98,13 @@ export default function TicketsPage() {
                   <TicketId number={t.ticket_number} />
                   <div className="flex gap-1.5"><StatusBadge status={t.status} /><PriorityBadge priority={t.priority} /></div>
                 </div>
-                <p className="mt-1.5 font-display font-semibold leading-snug">{t.title}</p>
-                <p className="mono text-xs text-meta mt-1">{t.category || "General"} · {timeAgo(t.created_at)}</p>
+                <p className="mt-1.5 font-medium leading-snug">{t.title}</p>
+                <p className="text-xs text-meta mt-1">{t.category || "General"} · {timeAgo(t.created_at)}</p>
               </Link>
             ))}
           </div>
           <div className="flex items-center justify-between mt-4 text-sm text-meta">
-            <span className="mono text-xs">{data.total} ticket(s)</span>
+            <span className="text-xs">{data.total === 1 ? "1 ticket" : `${data.total} tickets`}{data.total > data.per_page ? ` · page ${page} of ${Math.ceil(data.total / data.per_page)}` : ""}</span>
             <div className="flex gap-2">
               <button className="btn-outline btn-sm" disabled={page <= 1} onClick={() => update("page", String(page - 1))}>Previous</button>
               <button className="btn-outline btn-sm" disabled={page * data.per_page >= data.total} onClick={() => update("page", String(page + 1))}>Next</button>

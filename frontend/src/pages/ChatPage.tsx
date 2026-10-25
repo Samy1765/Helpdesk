@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, Loader2, Paperclip, Plus, RotateCcw, TriangleAlert, UserCog, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Loader2, Paperclip, Plus, RotateCcw, UserCog, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api, clientEnvironment } from "../services/api";
 import type { ActionView, ChatPayload, ChatReply, Message, Priority } from "../services/types";
@@ -11,10 +11,10 @@ interface Conversation { id: number; stage: string; ticket_id: number | null; ti
 
 const PRIORITIES: (Priority | "")[] = ["", "low", "medium", "high", "critical"];
 const STARTERS = [
-  "My VPN keeps timing out after I enter my 2FA code",
-  "Outlook crashes every time I open it",
-  "I'm locked out of my account",
-  "The printer on my floor isn't printing",
+  "VPN times out right after I approve the MFA prompt",
+  "Outlook closes as soon as I open it",
+  "My account is locked",
+  "Nothing prints on the 3rd floor printer",
 ];
 
 function latest<K extends keyof ChatPayload>(messages: Message[], key: K): ChatPayload[K] | undefined {
@@ -33,8 +33,8 @@ function Bubble({ m, isLast, busy, onQuick, onFixed, onTriage, onDecide }: {
   if (m.role === "user") {
     return (
       <div className="flex flex-col items-end">
-        <span className="mono text-[0.625rem] uppercase text-meta mb-1">{user?.username} · {clock(m.created_at)}</span>
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-cobalt px-3.5 py-2.5 text-sm text-white shadow-hover">
+        <span className="text-xs text-meta mb-1">{user?.full_name.split(" ")[0] || "You"} · {clock(m.created_at)}</span>
+        <div className="max-w-[85%] rounded-lg bg-cobalt px-3.5 py-2.5 text-sm text-white">
           <RichText text={m.content} />
           {!!m.payload?.attachments?.length && (
             <p className="mt-1.5 flex items-center gap-1 text-xs text-white/80"><Paperclip className="size-3" /> {m.payload.attachments.map((a) => a.filename).join(", ")}</p>
@@ -47,10 +47,9 @@ function Bubble({ m, isLast, busy, onQuick, onFixed, onTriage, onDecide }: {
   const verify = isLast && p.agent?.state === "verify";
   return (
     <div className="flex flex-col items-start gap-2 max-w-full">
-      <span className="flex items-center gap-1.5 mono text-[0.625rem] uppercase text-cobalt">
-        <span className="flex size-4 items-center justify-center rounded-sm bg-cobalt text-[0.5rem] font-bold text-white">P</span>
-        {m.role === "agent" ? `IT support${m.author ? ` · ${m.author}` : ""}` : m.role === "system" ? "System" : "Precision core agent"}
-        <span className="text-meta">{clock(m.created_at)}</span>
+      <span className="text-xs text-meta">
+        <span className="font-medium text-body">{m.role === "agent" ? (m.author || "IT support") : m.role === "system" ? "Helpdesk" : "Assistant"}</span>
+        {" · "}{clock(m.created_at)}
       </span>
       <div className="w-full sm:max-w-[92%] space-y-2">
         <div className="card px-3.5 py-3 text-sm text-body leading-relaxed"><RichText text={m.content} /></div>
@@ -59,13 +58,13 @@ function Bubble({ m, isLast, busy, onQuick, onFixed, onTriage, onDecide }: {
         {p.approvals?.map((a) => <ApprovalCard key={a.id} action={a} disabled={!isLast || busy} onDecide={(ok) => onDecide(a, ok)} />)}
         {p.escalation && (
           <div className="rounded-lg border border-violet-line bg-violet-soft p-3.5 text-sm">
-            <p className="label-caps !text-violet flex items-center gap-2"><UserCog className="size-4" /> Escalated to human support</p>
-            <p className="mt-1.5 text-body"><span className="font-semibold text-ink">{p.escalation.department}</span>{p.escalation.assignee ? ` · assigned to ${p.escalation.assignee}` : " · awaiting assignment"}</p>
+            <p className="font-medium text-ink flex items-center gap-2"><UserCog className="size-4 text-meta" /> Passed to {p.escalation.department}</p>
+            <p className="mt-1 text-body">{p.escalation.assignee ? `${p.escalation.assignee} is looking at it.` : "Someone from the team will pick it up shortly."}</p>
           </div>
         )}
         {p.incident && (
           <Link to={`/incidents?number=${p.incident.number}`} className="flex items-center justify-between gap-2 rounded-lg border border-crit-line bg-crit-soft p-3.5 text-sm hover:border-crit">
-            <span><span className="mono font-semibold text-crit-ink">{p.incident.number}</span><span className="block text-body">{p.incident.title}</span></span>
+            <span><span className="text-xs text-crit-ink">Known outage · <span className="mono">{p.incident.number}</span></span><span className="block text-body">{p.incident.title}</span></span>
             <ArrowRight className="size-4 text-crit" />
           </Link>
         )}
@@ -74,11 +73,10 @@ function Bubble({ m, isLast, busy, onQuick, onFixed, onTriage, onDecide }: {
         )}
         {isLast && !!p.quick_replies?.length && (
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {p.quick_replies.map((q, i) => (
+            {p.quick_replies.map((q) => (
               <button key={q} disabled={busy} onClick={() => onQuick(q)}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[0.8125rem] font-medium transition-colors disabled:opacity-50 ${
-                  /still|no,/i.test(q) ? "border-crit-line bg-surface text-crit-ink hover:bg-crit-soft" : "border-cobalt-line bg-surface text-cobalt hover:bg-cobalt-soft"}`}>
-                <span className={`dot size-1.5 ${/still|no,/i.test(q) ? "bg-crit" : i === 0 ? "bg-cobalt" : "bg-cobalt/60"}`} />{q}
+                className="rounded border border-line bg-surface px-3 py-1.5 text-[0.8125rem] text-body transition-colors hover:border-cobalt-line hover:bg-cobalt-soft disabled:opacity-50">
+                {q}
               </button>
             ))}
           </div>
@@ -154,8 +152,8 @@ export default function ChatPage() {
     setBusy(true);
     try {
       const r = await api.post<{ message: string }>(`/tickets/${ticket.id}/request-human`);
-      append({ role: "system", content: `${r.message}. A human IT agent now owns ${ticket.number}; you can follow progress on the ticket page.`,
-        payload: { alerts: [{ type: "escalation", message: "Manual triage requested." }] } });
+      append({ role: "system", content: `${r.message}. Someone from IT now owns ${ticket.number}; you can follow progress on the ticket page.`,
+        payload: { alerts: [{ type: "escalation", message: "You asked for a person from IT to take over." }] } });
     } catch (e) { setError(e instanceof Error ? e.message : "Request failed"); }
     finally { setBusy(false); }
   };
@@ -178,7 +176,7 @@ export default function ChatPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Upload failed"); }
   };
 
-  if (!conv && !error) return <Spinner label="Connecting to agent" />;
+  if (!conv && !error) return <Spinner label="Loading conversation" />;
 
   const inspector = (
     <div className="space-y-3">
@@ -186,9 +184,9 @@ export default function ChatPage() {
       {ticket && <TicketContextCard ticket={ticket} assessment={assessment} />}
       <SimilarList items={similar} />
       {!progress && (
-        <div className="card p-4 text-sm text-meta">
-          <p className="label-caps !text-ink mb-1.5">How this works</p>
-          The agent classifies your issue, checks for duplicates and outages, searches verified fixes, and only then asks an AI model - escalating to the right team if it can't solve it safely.
+        <div className="card p-4 text-sm text-meta leading-relaxed">
+          <p className="font-semibold text-ink mb-1.5">What happens next</p>
+          The assistant works out what kind of problem it is, checks whether others have reported the same thing, and looks for a fix that IT has already verified. A language model is only used when none fits. If the problem cannot be fixed safely from here, it goes to the right IT team with everything already written down.
         </div>
       )}
     </div>
@@ -201,7 +199,7 @@ export default function ChatPage() {
           <SessionHeader conversationId={conv?.id ?? null} payload={lastPayload} />
           {progress && (
             <button className="lg:hidden btn-outline w-full justify-between" onClick={() => setShowTelemetry((s) => !s)}>
-              <span className="label-caps !text-ink">Agent telemetry & ticket context</span>
+              <span className="text-sm font-medium">Progress and ticket details</span>
               <ChevronDown className={`size-4 transition-transform ${showTelemetry ? "rotate-180" : ""}`} />
             </button>
           )}
@@ -211,8 +209,8 @@ export default function ChatPage() {
         <div className="flex-1 space-y-5 py-5">
           {!messages.length && (
             <div className="card p-5">
-              <p className="font-display font-semibold text-[1.0625rem]">Hi {user?.full_name.split(" ")[0]}, what's going wrong?</p>
-              <p className="text-sm text-meta mt-1">Describe the problem in your own words. I'll ask only what I need, then try verified fixes before involving IT.</p>
+              <p className="font-semibold text-base">Hi {user?.full_name.split(" ")[0]}, what is not working?</p>
+              <p className="text-sm text-meta mt-1">Describe it the way you would to a colleague. You can also start with one of these:</p>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {STARTERS.map((s) => (
                   <button key={s} className="text-left rounded border border-line px-3 py-2.5 text-sm text-body hover:border-cobalt-line hover:bg-cobalt-soft" onClick={() => send(s)}>{s}</button>
@@ -225,8 +223,8 @@ export default function ChatPage() {
               onFixed={() => send("Yes, it's fixed")} onTriage={triage} onDecide={decide} />
           ))}
           {busy && (
-            <div className="flex items-center gap-2 mono text-xs text-cobalt">
-              <Loader2 className="size-3.5 animate-spin" /> Precision core agent is analysing - classifying, checking duplicates, searching knowledge…
+            <div className="flex items-center gap-2 text-sm text-meta">
+              <Loader2 className="size-3.5 animate-spin" /> Looking into it…
             </div>
           )}
           <ErrorNote message={error} />
@@ -246,14 +244,14 @@ export default function ChatPage() {
             <button type="button" className="btn-outline !p-2" onClick={() => fileInput.current?.click()} aria-label="Attach screenshot or log"><Plus className="size-4" /></button>
             <input ref={fileInput} type="file" className="hidden" accept="image/*,.pdf,.txt,.log"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-            <input className="input" placeholder="Type IT issue or terminal command..." value={text} onChange={(e) => setText(e.target.value)} disabled={busy} maxLength={4000} />
+            <input className="input" placeholder="Describe the problem, for example: Outlook will not open" value={text} onChange={(e) => setText(e.target.value)} disabled={busy} maxLength={4000} />
             <button className="btn-accent !p-2.5" disabled={busy || !text.trim()} aria-label="Send">{busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}</button>
           </div>
           <div className="flex items-center justify-between gap-2 px-1 pt-2">
             <label className="flex items-center gap-2 text-xs text-meta">
-              <TriangleAlert className="size-3.5" /> Your priority
+              How urgent is it?
               <select className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-body" value={priority} onChange={(e) => setPriority(e.target.value as Priority | "")}>
-                {PRIORITIES.map((p) => <option key={p} value={p}>{p ? p[0].toUpperCase() + p.slice(1) : "Let AI assess"}</option>)}
+                {PRIORITIES.map((p) => <option key={p} value={p}>{p ? p[0].toUpperCase() + p.slice(1) : "Not sure"}</option>)}
               </select>
             </label>
             <button type="button" className="btn-ghost btn-sm" onClick={newChat}><RotateCcw className="size-3.5" /> New chat</button>

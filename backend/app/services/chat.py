@@ -214,8 +214,8 @@ async def _ask_next_or_create(db, user: User, conv: Conversation) -> ChatReply:
             text, options = SYMPTOM_QUESTIONS.get(slots.get("category") or "", DEFAULT_SYMPTOM)
         else:
             text, options = SCOPE_QUESTION
-        progress = [{"key": "understand", "label": "Understanding issue", "status": "running"},
-                    {"key": "classify", "label": "Classifying category", "status": "done" if slots.get("category") else "running"}]
+        progress = [{"key": "understand", "label": "Understand the problem", "status": "running"},
+                    {"key": "classify", "label": "Work out the category", "status": "done" if slots.get("category") else "running"}]
         return await _reply(db, conv, text, quick_replies=options,
                             payload={"progress": progress, "draft": {"category": slots.get("category")}})
     return await _create_ticket_and_run_agent(db, user, conv)

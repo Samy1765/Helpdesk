@@ -180,7 +180,7 @@ async def resolve(ticket_id: int, data: ResolveIn, db: AsyncSession = Depends(ge
                                                                 TicketSolution.source == "agent"))).unique().scalars():
             await knowledge.reject_solution(db, s, user)
         await ticket_svc.add_event(db, t, "ai_suggestion_rejected", user_id=user.id,
-                                   description="IT marked the AI proposal as incorrect")
+                                   description="IT marked the suggested fix as wrong")
     t.resolution_summary = data.resolution
     t.resolved_by_ai = False
     if t.assigned_to is None:

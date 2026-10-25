@@ -22,6 +22,8 @@ from app.services.correlation import as_aware
 
 router = APIRouter(tags=["Dashboard & reference data"])
 
+# Categories employees most often fix themselves, in the order the dashboard lists their guides
+GUIDE_CATEGORIES = ("Password", "VPN", "Email", "Network", "Printer", "Hardware")
 NOTIFY_EVENTS = ("status_changed", "escalated", "assigned", "linked_to_incident", "comment", "duplicate_linked")
 
 
@@ -43,8 +45,13 @@ async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get
     if resolved_rows:
         mins = [(as_aware(r[1]) - as_aware(r[0])).total_seconds() / 60 for r in resolved_rows]
         avg_minutes = round(sum(mins) / len(mins), 1)
-    guides = (await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.is_active.is_(True))
-                               .order_by(KnowledgeDocument.id).limit(4))).unique().scalars().all()
+    # One self-service guide per everyday category (the category's main runbook, i.e. the oldest one)
+    active_docs = (await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.is_active.is_(True))
+                                    .order_by(KnowledgeDocument.id))).unique().scalars().all()
+    first_by_category: dict[str, KnowledgeDocument] = {}
+    for d in active_docs:
+        first_by_category.setdefault(d.category.name if d.category else "", d)
+    guides = [first_by_category[c] for c in GUIDE_CATEGORIES if c in first_by_category] or list(active_docs[:6])
     pending_actions = (await db.execute(select(func.count(AgentAction.id)).join(Ticket, AgentAction.ticket_id == Ticket.id)
                                         .where(AgentAction.status == "pending_approval", mine))).scalar() or 0
 

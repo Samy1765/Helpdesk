@@ -73,12 +73,12 @@ def assert_transition(current: str, target: str) -> None:
 
 # User-facing progress checklist (high-level status only, never internal reasoning)
 PROGRESS_STEPS: list[tuple[str, str]] = [
-    ("understand", "Understanding issue"),
-    ("classify", "Classifying category"),
-    ("priority", "Validating priority"),
-    ("duplicates", "Checking duplicate tickets"),
-    ("knowledge", "Searching knowledge base"),
-    ("troubleshoot", "Troubleshooting"),
-    ("verify", "Verification"),
-    ("outcome", "Resolution / escalation"),
+    ("understand", "Understand the problem"),
+    ("classify", "Work out the category"),
+    ("priority", "Check the priority"),
+    ("duplicates", "Look for the same report from others"),
+    ("knowledge", "Search the knowledge base"),
+    ("troubleshoot", "Suggest a fix"),
+    ("verify", "Confirm it worked"),
+    ("outcome", "Close or pass to IT"),
 ]

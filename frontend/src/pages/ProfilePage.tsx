@@ -4,7 +4,7 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../hooks/useApi";
 import { api, tokens } from "../services/api";
-import { Avatar, Badge, ErrorNote, Field, KeyValue, PageHeader, shortDate, titleCase } from "../components/ui";
+import { Avatar, Badge, ErrorNote, Field, KeyValue, PageHeader, shortDate } from "../components/ui";
 
 export default function ProfilePage() {
   const { user, refreshUser, logout } = useAuth();
@@ -41,10 +41,10 @@ export default function ProfilePage() {
       <div className="card p-4 flex items-center gap-4">
         <Avatar name={user.full_name} />
         <div className="flex-1 min-w-0">
-          <p className="font-display font-semibold">{user.full_name}</p>
-          <p className="mono text-xs text-meta">{user.email}</p>
+          <p className="font-semibold">{user.full_name}</p>
+          <p className="text-sm text-meta">{user.email}</p>
         </div>
-        <Badge tone={user.role === "admin" ? "ink" : user.role === "it_support" ? "violet" : "cobalt"}>{titleCase(user.role)}</Badge>
+        <Badge>{user.role === "it_support" ? "IT support" : user.role === "admin" ? "Administrator" : "Employee"}</Badge>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <KeyValue k="Username" v={user.username} mono />
@@ -53,7 +53,7 @@ export default function ProfilePage() {
       {msg && <div className="rounded border border-ok-line bg-ok-soft px-3 py-2 text-sm text-ok-ink">{msg}</div>}
       <ErrorNote message={err} />
       <form onSubmit={save} className="card p-4 space-y-3">
-        <p className="label-caps !text-ink">Details</p>
+        <h2 className="font-semibold">Your details</h2>
         <Field label="Full name"><input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} minLength={2} required /></Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Job title"><input className="input" value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} /></Field>
@@ -64,14 +64,15 @@ export default function ProfilePage() {
         <button className="btn-primary">Save profile</button>
       </form>
       <form onSubmit={changePw} className="card p-4 space-y-3">
-        <p className="label-caps !text-ink">Change password</p>
+        <h2 className="font-semibold">Change password</h2>
+        <p className="text-sm text-meta -mt-1">You will stay signed in here. Other browsers and devices will be signed out.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Current password"><input className="input" type="password" autoComplete="current-password" value={pw.current_password} onChange={(e) => setPw({ ...pw, current_password: e.target.value })} required /></Field>
           <Field label="New password"><input className="input" type="password" autoComplete="new-password" value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} required minLength={8} /></Field>
         </div>
         <button className="btn-outline">Update password</button>
       </form>
-      <button className="btn-danger w-full" onClick={async () => { await logout(); navigate("/login"); }}><LogOut className="size-4" /> Log out</button>
+      <button className="btn-outline" onClick={async () => { await logout(); navigate("/login"); }}><LogOut className="size-4" /> Sign out</button>
     </div>
   );
 }

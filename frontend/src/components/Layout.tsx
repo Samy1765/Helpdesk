@@ -1,42 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bell, BookOpen, Bot, Headset, Home, LayoutGrid, LogOut, Menu, Shield, Terminal, Ticket,
+  Bell, BookOpen, Headset, Home, LayoutGrid, LifeBuoy, LogOut, Menu, MessageSquare, Settings, Ticket,
   TriangleAlert, User as UserIcon, X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../hooks/useApi";
-import { Avatar, timeAgo } from "./ui";
+import { Avatar, sentenceCase, timeAgo } from "./ui";
 
 interface NavItem { to: string; label: string; icon: typeof Home; roles?: string[] }
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Home", icon: Home },
-  { to: "/chat", label: "AI Chat", icon: Bot },
+  { to: "/chat", label: "Get help", icon: MessageSquare },
   { to: "/tickets", label: "Tickets", icon: Ticket },
   { to: "/incidents", label: "Incidents", icon: TriangleAlert },
-  { to: "/knowledge-base", label: "Knowledge Base", icon: BookOpen },
-  { to: "/it-support", label: "IT Support", icon: Headset, roles: ["it_support", "admin"] },
-  { to: "/admin", label: "Admin Analytics", icon: Shield, roles: ["admin"] },
+  { to: "/knowledge-base", label: "Knowledge base", icon: BookOpen },
+  { to: "/it-support", label: "Support queue", icon: Headset, roles: ["it_support", "admin"] },
+  { to: "/admin", label: "Administration", icon: Settings, roles: ["admin"] },
   { to: "/profile", label: "Profile", icon: UserIcon },
 ];
 
-const SECTION: Record<string, string> = {
-  dashboard: "Ops Dashboard", chat: "AI Support Agent", tickets: "Ticket Center", incidents: "Incidents",
-  "knowledge-base": "Knowledge Base", "it-support": "Support Console", admin: "Admin Analytics", profile: "Profile",
-};
-
 interface Notification { id: string; type: string; message: string; created_at: string; ticket_id?: number; incident_id?: number; ticket_number?: string }
 
-function Logo({ section }: { section: string }) {
+function Logo() {
   return (
     <Link to="/dashboard" className="flex items-center gap-2.5 min-w-0">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-cobalt text-white">
-        <Terminal className="size-4" strokeWidth={2.5} />
+      <span className="flex size-7 shrink-0 items-center justify-center rounded bg-cobalt text-white">
+        <LifeBuoy className="size-4" />
       </span>
       <span className="min-w-0 leading-tight">
-        <span className="block font-display text-[0.95rem] font-extrabold tracking-tight">PRECISION<span className="text-cobalt">.AI</span></span>
-        <span className="block font-mono text-[0.625rem] uppercase tracking-[0.08em] text-meta truncate">{section}</span>
+        <span className="block text-[0.9375rem] font-semibold">Precision AI</span>
+        <span className="block text-xs text-meta truncate">IT Helpdesk</span>
       </span>
     </Link>
   );
@@ -65,7 +60,7 @@ function Notifications() {
       </button>
       {open && (
         <div className="absolute right-0 top-11 z-50 w-[min(22rem,calc(100vw-2rem))] card shadow-pop">
-          <div className="card-header"><span className="label-caps !text-body">Alerts</span><span className="mono text-xs text-meta">{count}</span></div>
+          <div className="card-header"><span className="text-sm font-semibold">Notifications</span>{count > 0 && <span className="text-xs text-meta">{count} new</span>}</div>
           <div className="max-h-96 overflow-y-auto scroll-thin divide-y divide-muted">
             {!data?.items.length && <p className="px-4 py-6 text-sm text-meta text-center">You're all caught up.</p>}
             {data?.items.map((n) => (
@@ -77,7 +72,7 @@ function Notifications() {
                 <span className={`dot mt-1.5 shrink-0 ${n.type === "incident" ? "bg-crit" : n.type === "approval" ? "bg-warn" : "bg-cobalt"}`} />
                 <span className="min-w-0">
                   <span className="block text-sm text-body leading-snug">{n.message}</span>
-                  <span className="block mono text-[0.6875rem] text-meta mt-0.5">{n.ticket_number ? `${n.ticket_number} · ` : ""}{timeAgo(n.created_at)}</span>
+                  <span className="block text-xs text-meta mt-0.5">{n.ticket_number ? `${n.ticket_number} · ` : ""}{timeAgo(n.created_at)}</span>
                 </span>
               </button>
             ))}
@@ -94,7 +89,6 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const items = NAV.filter((n) => !n.roles || (user && n.roles.includes(user.role)));
-  const section = SECTION[location.pathname.split("/")[1]] || "Ops Dashboard";
 
   useEffect(() => setDrawer(false), [location.pathname]);
 
@@ -116,9 +110,8 @@ export default function Layout() {
     <div className="min-h-dvh lg:pl-60">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-60 flex-col border-r border-line bg-surface">
-        <div className="h-16 flex items-center px-4 border-b border-line"><Logo section="IT Automated Support" /></div>
+        <div className="h-14 flex items-center px-4 border-b border-line"><Logo /></div>
         <div className="flex-1 overflow-y-auto p-3 scroll-thin">
-          <p className="label-caps px-3 mb-2">Workspace</p>
           {navList}
         </div>
         {user && (
@@ -126,7 +119,7 @@ export default function Layout() {
             <Avatar name={user.full_name} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{user.full_name}</p>
-              <p className="mono text-[0.6875rem] text-meta uppercase">{user.role.replace("_", " ")}</p>
+              <p className="text-xs text-meta">{user.role === "it_support" ? "IT support" : sentenceCase(user.role)}</p>
             </div>
             <button className="btn-ghost !p-2" onClick={doLogout} aria-label="Log out"><LogOut className="size-4" /></button>
           </div>
@@ -134,13 +127,10 @@ export default function Layout() {
       </aside>
 
       {/* Top bar */}
-      <header className="sticky top-0 z-40 h-16 border-b border-line bg-surface/95 backdrop-blur">
+      <header className="sticky top-0 z-40 h-14 border-b border-line bg-surface">
         <div className="h-full mx-auto max-w-6xl flex items-center gap-3 px-4">
           <button className="btn-ghost !p-2 lg:hidden -ml-2" aria-label="Menu" onClick={() => setDrawer(true)}><Menu className="size-5 text-ink" /></button>
-          <div className="lg:hidden min-w-0"><Logo section={section} /></div>
-          <div className="hidden lg:block">
-            <p className="font-mono text-[0.6875rem] uppercase tracking-[0.08em] text-meta">{section}</p>
-          </div>
+          <div className="lg:hidden min-w-0"><Logo /></div>
           <div className="flex-1" />
           <Notifications />
           {user && <Link to="/profile" aria-label="Profile"><Avatar name={user.full_name} /></Link>}
@@ -152,8 +142,8 @@ export default function Layout() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-[rgba(15,23,42,0.4)]" onClick={() => setDrawer(false)} />
           <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-surface shadow-modal flex flex-col">
-            <div className="h-16 flex items-center justify-between px-4 border-b border-line">
-              <Logo section={section} />
+            <div className="h-14 flex items-center justify-between px-4 border-b border-line">
+              <Logo />
               <button className="btn-ghost !p-2" onClick={() => setDrawer(false)} aria-label="Close menu"><X className="size-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-3">{navList}</div>
@@ -167,15 +157,15 @@ export default function Layout() {
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-5">
           {[NAV[0], NAV[1], NAV[2], NAV[3]].map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className={({ isActive }) =>
-              `flex flex-col items-center gap-1 py-2.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] ${isActive ? "text-cobalt" : "text-meta"}`}>
+              `flex flex-col items-center gap-1 py-2 text-[0.6875rem] font-medium ${isActive ? "text-cobalt" : "text-meta"}`}>
               <Icon className="size-5" /> {label}
             </NavLink>
           ))}
-          <button onClick={() => setDrawer(true)} className="flex flex-col items-center gap-1 py-2.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-meta">
+          <button onClick={() => setDrawer(true)} className="flex flex-col items-center gap-1 py-2 text-[0.6875rem] font-medium text-meta">
             <LayoutGrid className="size-5" /> More
           </button>
         </div>

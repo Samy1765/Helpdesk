@@ -1,79 +1,84 @@
 @import "tailwindcss";
 
-/* Precision IT Engine design tokens (see DESIGN.md) */
+/* Design tokens. One brand colour (deep blue), neutral greys, semantic colours used only for status. */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Manrope", "Inter", ui-sans-serif, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-canvas: #f8fafc;
+  --color-canvas: #f7f8fa;
   --color-surface: #ffffff;
-  --color-muted: #f1f5f9;
-  --color-line: #e2e8f0;
-  --color-line-strong: #cbd5e1;
+  --color-muted: #f0f2f5;
+  --color-line: #e1e4e8;
+  --color-line-strong: #c8cdd3;
 
-  --color-ink: #0f172a;
-  --color-ink-2: #1e293b;
-  --color-body: #334155;
-  --color-meta: #64748b;
-  --color-faint: #94a3b8;
+  --color-ink: #16191d;
+  --color-ink-2: #2a2f35;
+  --color-body: #3d434a;
+  --color-meta: #646b73;
+  --color-faint: #8b9198;
 
-  --color-cobalt: #2563eb;
-  --color-cobalt-dark: #1e40af;
-  --color-cobalt-soft: #eff6ff;
-  --color-cobalt-line: #bfdbfe;
-  --color-cobalt-ring: #93c5fd;
+  /* brand (kept under the "cobalt" name used throughout the components) */
+  --color-cobalt: #1f4f9c;
+  --color-cobalt-dark: #173d7a;
+  --color-cobalt-soft: #eef3fa;
+  --color-cobalt-line: #c8d6ec;
+  --color-cobalt-ring: #7da0d6;
 
-  --color-ok: #16a34a;
-  --color-ok-ink: #15803d;
-  --color-ok-soft: #f0fdf4;
-  --color-ok-line: #bbf7d0;
+  --color-ok: #1e7f4f;
+  --color-ok-ink: #17643e;
+  --color-ok-soft: #eef7f2;
+  --color-ok-line: #c3e3d1;
 
-  --color-warn: #d97706;
-  --color-warn-ink: #b45309;
-  --color-warn-soft: #fffbeb;
-  --color-warn-line: #fde68a;
+  --color-warn: #b8660b;
+  --color-warn-ink: #8f4f08;
+  --color-warn-soft: #fdf6ec;
+  --color-warn-line: #f0d6b0;
 
-  --color-crit: #dc2626;
-  --color-crit-ink: #b91c1c;
-  --color-crit-soft: #fef2f2;
-  --color-crit-line: #fecaca;
+  --color-crit: #b42318;
+  --color-crit-ink: #912018;
+  --color-crit-soft: #fdf1f0;
+  --color-crit-line: #f3c9c5;
 
-  --color-info: #0284c7;
-  --color-info-soft: #f0f9ff;
-  --color-info-line: #bae6fd;
+  --color-info: #1f4f9c;
+  --color-info-soft: #eef3fa;
+  --color-info-line: #c8d6ec;
 
-  --color-violet: #7c3aed;
-  --color-violet-soft: #f5f3ff;
-  --color-violet-line: #ddd6fe;
+  /* "violet" is used for tickets that are with IT staff; a muted slate keeps it from competing with the brand */
+  --color-violet: #4b5563;
+  --color-violet-soft: #f1f3f5;
+  --color-violet-line: #d5d9de;
 
   --radius-sm: 0.125rem;
   --radius: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.375rem;
 
-  --shadow-hover: 0 1px 3px 0 rgba(15, 23, 42, 0.05);
-  --shadow-pop: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-  --shadow-modal: 0 12px 24px -4px rgba(15, 23, 42, 0.12);
+  --shadow-hover: 0 1px 2px 0 rgba(22, 25, 29, 0.06);
+  --shadow-pop: 0 6px 16px -4px rgba(22, 25, 29, 0.12), 0 2px 4px -1px rgba(22, 25, 29, 0.06);
+  --shadow-modal: 0 12px 28px -6px rgba(22, 25, 29, 0.18);
 
-  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.8); }
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 2rem;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.25rem;
 }
 
 @layer base {
   html { -webkit-text-size-adjust: 100%; }
-  body {
-    @apply bg-canvas text-ink font-sans antialiased;
-    font-feature-settings: "cv11", "ss01";
-  }
-  h1, h2, h3, h4 { @apply font-display text-ink; }
+  body { @apply bg-canvas text-ink font-sans antialiased; }
+  h1, h2, h3, h4 { @apply text-ink font-semibold; }
   :focus-visible { outline: 2px solid var(--color-cobalt-ring); outline-offset: 2px; }
-  ::selection { background: #dbeafe; }
+  ::selection { background: #d8e3f4; }
 }
 
 /* Component classes are declared with @utility so they compose via @apply and accept variants/`!` (Tailwind v4). */
@@ -82,12 +87,13 @@
 @utility card-hover { @apply transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-hover; }
 @utility card-header { @apply flex items-center justify-between gap-3 px-4 py-3 border-b border-muted; }
 
-@utility label-caps { @apply text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-meta leading-4; }
+/* Small section/field label. Sentence case: the text is shown exactly as written. */
+@utility label-caps { @apply text-[0.8125rem] font-medium text-meta leading-5; }
 @utility mono { @apply font-mono tabular-nums; }
-@utility code-chip { @apply font-mono text-[0.75rem] font-medium rounded border border-line bg-muted px-1.5 py-0.5 text-body; }
+@utility code-chip { @apply font-mono text-[0.75rem] rounded border border-line bg-muted px-1.5 py-0.5 text-body; }
 
 @utility btn { @apply inline-flex items-center justify-center gap-2 rounded px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
-@utility btn-primary { @apply btn bg-ink text-white hover:bg-ink-2; }
+@utility btn-primary { @apply btn bg-cobalt text-white hover:bg-cobalt-dark; }
 @utility btn-accent { @apply btn bg-cobalt text-white hover:bg-cobalt-dark; }
 @utility btn-outline { @apply btn bg-surface border border-line text-body hover:bg-canvas hover:border-line-strong; }
 @utility btn-danger { @apply btn bg-crit-soft border border-crit-line text-crit hover:bg-[#fee2e2]; }
@@ -97,8 +103,11 @@
 @utility input { @apply w-full rounded border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint outline-none transition-shadow focus:border-cobalt focus:shadow-[0_0_0_1px_var(--color-cobalt)]; }
 @utility select { @apply input pr-8 appearance-none bg-no-repeat bg-[right_0.6rem_center]; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
 
-@utility badge { @apply inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[0.6875rem] font-semibold leading-4 whitespace-nowrap; }
+@utility badge { @apply inline-flex items-center gap-1 rounded border px-1.5 py-px text-xs font-medium leading-[1.125rem] whitespace-nowrap; }
 @utility dot { @apply inline-block size-2 rounded-full; }
+
+/* Table header cells: the one place small caps-style labels are used */
+@utility th { @apply px-3 py-2 text-left text-xs font-medium text-meta border-b border-line bg-canvas; }
 
 /* thin scrollbars for dense panels */
 .scroll-thin { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
