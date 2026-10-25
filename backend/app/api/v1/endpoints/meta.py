@@ -5,7 +5,7 @@ Precision AI - Shared read endpoints: role-aware dashboard, notifications, refer
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.serializers import incident_out, iso, ticket_out
@@ -43,10 +43,18 @@ async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get
     if resolved_rows:
         mins = [(as_aware(r[1]) - as_aware(r[0])).total_seconds() / 60 for r in resolved_rows]
         avg_minutes = round(sum(mins) / len(mins), 1)
-    guides = (await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.is_active.is_(True))
-                               .order_by(KnowledgeDocument.id).limit(4))).unique().scalars().all()
-    pending_actions = (await db.execute(select(func.count(AgentAction.id)).join(Ticket, AgentAction.ticket_id == Ticket.id)
-                                        .where(AgentAction.status == "pending_approval", mine))).scalar() or 0
+    # one article from each of the four categories with the most tickets in the last 30 days
+    busiest = [r[0] for r in (await db.execute(
+        select(Ticket.category_id, func.count(Ticket.id)).where(Ticket.created_at >= utcnow() - timedelta(days=30),
+                                                                Ticket.category_id.is_not(None))
+        .group_by(Ticket.category_id).order_by(func.count(Ticket.id).desc()).limit(4))).all()]
+    docs = (await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.is_active.is_(True))
+                             .order_by(KnowledgeDocument.title))).unique().scalars().all()
+    guides = [d for cid in busiest for d in [next((x for x in docs if x.category_id == cid), None)] if d]
+    guides += [d for d in docs if d not in guides][:4 - len(guides)]
+    # tickets that need the employee: a fix to confirm, or an action to approve (counted once per ticket)
+    with_approval = select(AgentAction.ticket_id).where(AgentAction.status == "pending_approval")
+    awaiting_me = await count(mine, or_(Ticket.status == TicketStatus.AWAITING_USER, Ticket.id.in_(with_approval)))
 
     # Real agent pipeline progress for each recent ticket (share of checklist steps finished)
     progress: dict[int, int] = {}
@@ -63,7 +71,7 @@ async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get
         "my_tickets": {
             "open": await count(mine, Ticket.status.in_(TicketStatus.OPEN)),
             "in_analysis": await count(mine, Ticket.status.in_((TicketStatus.AI_ANALYSIS, TicketStatus.TROUBLESHOOTING))),
-            "awaiting_me": await count(mine, Ticket.status == TicketStatus.AWAITING_USER) + int(pending_actions),
+            "awaiting_me": awaiting_me,
             "resolved": await count(mine, Ticket.status == TicketStatus.RESOLVED),
             "avg_resolution_minutes": avg_minutes,
         },

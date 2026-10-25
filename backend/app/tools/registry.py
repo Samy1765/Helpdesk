@@ -156,7 +156,7 @@ TOOLS: dict[str, ToolSpec] = {t.name: t for t in [
              client_environment, params=("client",)),
 
     ToolSpec("flush_dns_cache", RESTRICTED, "Flush DNS cache", "Clear the resolver cache on the user's device",
-             approver_role="requester", risk_note="Idempotent; no data loss"),
+             approver_role="requester", risk_note="Safe to repeat; nothing is lost"),
     ToolSpec("restart_vpn_client_service", RESTRICTED, "Restart VPN client service",
              "Restart the VPN agent on the user's device", approver_role="requester",
              risk_note="Drops any active VPN session for ~10 seconds"),

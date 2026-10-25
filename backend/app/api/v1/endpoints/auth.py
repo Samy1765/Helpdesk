@@ -16,7 +16,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.serializers import user_out
+from app.api.serializers import iso, user_out
 from app.core.config import get_settings
 from app.core.deps import get_current_session, get_current_user
 from app.core.logging import get_logger
@@ -205,7 +205,7 @@ async def refresh(data: RefreshIn, request: Request, db: AsyncSession = Depends(
         if exc.reason == "reuse" and exc.session is not None:
             await audit(db, "refresh_token_reuse", user_id=exc.session.user_id, resource_type="user",
                         resource_id=exc.session.user_id, ip_address=client_ip(request),
-                        details={"session_created": exc.session.created_at.isoformat()})
+                        details={"session_created": iso(exc.session.created_at)})
             await db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, SESSION_ENDED, headers={"WWW-Authenticate": "Bearer"})
     return _token_body(user, access, refresh_token)

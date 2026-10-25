@@ -193,7 +193,7 @@ export interface Incident {
 export interface Solution {
   id: number;
   title: string;
-  problem_description: string;
+  problem_description: string | null; // null for employees: it comes from another person's ticket
   symptoms: string | null;
   root_cause: string | null;
   solution_description: string;
@@ -226,6 +226,8 @@ export interface KnowledgeDoc {
   source: string;
   trust_level: string;
   is_active: boolean;
+  owner: string;
+  last_reviewed: string | null;
   created_at: string;
   updated_at: string;
   excerpt: string;

@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Layout from "./components/Layout";
-import { Spinner } from "./components/ui";
+import { SkeletonPage, Spinner } from "./components/ui";
 import { useAuth } from "./context/AuthContext";
 import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -18,10 +18,14 @@ import type { Role } from "./services/types";
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 
+function FullPageLoading() {
+  return <div className="flex min-h-dvh items-center justify-center gap-2 text-sm text-meta" role="status"><Spinner /> Signing you in</div>;
+}
+
 function Protected({ children, roles }: { children: ReactNode; roles?: Role[] }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  if (loading) return <Spinner label="Authenticating" />;
+  if (loading) return <FullPageLoading />;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
@@ -29,7 +33,7 @@ function Protected({ children, roles }: { children: ReactNode; roles?: Role[] })
 
 function PublicOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return <Spinner />;
+  if (loading) return <FullPageLoading />;
   return user ? <Navigate to="/dashboard" replace /> : <>{children}</>;
 }
 
@@ -45,8 +49,8 @@ export default function App() {
         <Route path="/tickets/:id" element={<TicketDetailPage />} />
         <Route path="/incidents" element={<IncidentsPage />} />
         <Route path="/knowledge-base" element={<KnowledgePage />} />
-        <Route path="/it-support" element={<Protected roles={["it_support", "admin"]}><Suspense fallback={<Spinner />}><SupportPage /></Suspense></Protected>} />
-        <Route path="/admin" element={<Protected roles={["admin"]}><Suspense fallback={<Spinner />}><AdminPage /></Suspense></Protected>} />
+        <Route path="/it-support" element={<Protected roles={["it_support", "admin"]}><Suspense fallback={<SkeletonPage />}><SupportPage /></Suspense></Protected>} />
+        <Route path="/admin" element={<Protected roles={["admin"]}><Suspense fallback={<SkeletonPage />}><AdminPage /></Suspense></Protected>} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

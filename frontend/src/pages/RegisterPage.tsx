@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../hooks/useApi";
-import { ErrorNote, Field } from "../components/ui";
+import { Field, FormError, Spinner } from "../components/ui";
 import AuthShell from "./AuthShell";
 
 export default function RegisterPage() {
@@ -30,27 +29,27 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthShell title="Create account" subtitle="Employee accounts can chat with the agent and track their tickets.">
-      <form onSubmit={submit} className="space-y-3.5">
-        <Field label="Full name"><input className="input" value={form.full_name} onChange={set("full_name")} required minLength={2} /></Field>
-        <Field label="Work email"><input className="input" type="email" value={form.email} onChange={set("email")} required /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Username"><input className="input" value={form.username} onChange={set("username")} required minLength={3} pattern="[A-Za-z0-9_.]+" /></Field>
-          <Field label="Department">
-            <select className="select" value={form.department_id} onChange={set("department_id")}>
-              <option value="">-</option>
-              {departments?.filter((d) => !d.is_support_team).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </Field>
-        </div>
-        <Field label="Job title (optional)"><input className="input" value={form.job_title} onChange={set("job_title")} /></Field>
-        <Field label="Password" hint="At least 8 characters with upper-case, lower-case and a digit.">
-          <input className="input" type="password" autoComplete="new-password" value={form.password} onChange={set("password")} required minLength={8} />
+    <AuthShell title="Create an account" subtitle="For employees. IT support and admin access is granted by an administrator.">
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Full name" htmlFor="full_name"><input id="full_name" className="input" value={form.full_name} onChange={set("full_name")} required minLength={2} autoComplete="name" /></Field>
+        <Field label="Work email" htmlFor="email"><input id="email" className="input" type="email" value={form.email} onChange={set("email")} required autoComplete="email" /></Field>
+        <Field label="Username" htmlFor="username" hint="Letters, numbers, dots and underscores.">
+          <input id="username" className="input" value={form.username} onChange={set("username")} required minLength={3} pattern="[A-Za-z0-9_.]+" autoComplete="username" />
         </Field>
-        <ErrorNote message={error} />
-        <button className="btn-accent w-full" disabled={busy}>{busy ? <Loader2 className="size-4 animate-spin" /> : "Create account"}</button>
+        <Field label="Department" htmlFor="department">
+          <select id="department" className="select" value={form.department_id} onChange={set("department_id")}>
+            <option value="">Choose your department</option>
+            {departments?.filter((d) => !d.is_support_team).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Job title (optional)" htmlFor="job_title"><input id="job_title" className="input" value={form.job_title} onChange={set("job_title")} autoComplete="organization-title" /></Field>
+        <Field label="Password" htmlFor="password" hint="At least 8 characters, with an upper-case letter, a lower-case letter and a number.">
+          <input id="password" className="input" type="password" autoComplete="new-password" value={form.password} onChange={set("password")} required minLength={8} />
+        </Field>
+        <FormError message={error} />
+        <button className="btn-primary w-full" disabled={busy}>{busy && <Spinner />} Create account</button>
       </form>
-      <p className="text-sm text-meta mt-5">Already registered? <Link to="/login" className="text-cobalt font-medium hover:underline">Sign in</Link></p>
+      <p className="mt-4 text-sm text-meta">Already registered? <Link to="/login" className="font-medium text-brand hover:underline">Sign in</Link></p>
     </AuthShell>
   );
 }

@@ -1,47 +1,56 @@
 import { useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
-import { BookOpen, FileText, Loader2, Plus, Search, Sparkles, X } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { BookOpen, Plus, Search, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../hooks/useApi";
 import { api } from "../services/api";
 import type { KnowledgeDoc, Solution } from "../services/types";
 import Markdown from "../components/Markdown";
-import { Badge, Empty, ErrorNote, Field, PageHeader, SectionTitle, Spinner, pct, shortDate, titleCase } from "../components/ui";
+import {
+  Badge, Card, DefinitionList, EmptyState, ErrorState, Field, FormError, PageHeader, Section, SkeletonLines, SkeletonTable,
+  Spinner, TrustBadge,
+} from "../components/ui";
+import { date, percent, sentenceCase } from "../lib/format";
 
 interface SearchResult {
   documents: { chunk_id: number; ref: string; document_id: number; title: string; heading: string | null; excerpt: string; similarity: number; category: string | null }[];
   solutions: Solution[];
 }
 
-const TRUST_TONE: Record<string, "ok" | "info" | "warn"> = { admin_verified: "ok", human_verified: "ok", user_confirmed: "info", ai_generated: "warn" };
-const TRUST_LABEL: Record<string, string> = { admin_verified: "VERIFIED", human_verified: "HUMAN-APPROVED", user_confirmed: "USER-CONFIRMED", ai_generated: "AI-GENERATED" };
+const REVIEW_DUE_DAYS = 180;
+const reviewDue = (d: string | null) => !d || (Date.now() - new Date(`${d}T00:00:00`).getTime()) / 86400000 > REVIEW_DUE_DAYS;
 
 function DocViewer({ id, onClose }: { id: number; onClose: () => void }) {
-  const { data, loading } = useApi<KnowledgeDoc>(`/knowledge/documents/${id}`);
+  const { data, loading, error, reload } = useApi<KnowledgeDoc>(`/knowledge/documents/${id}`);
   return (
-    <div className="card">
+    <article className="card" aria-label={data?.title || "Article"}>
       <div className="card-header">
-        <span className="flex items-center gap-2 min-w-0"><FileText className="size-4 text-cobalt shrink-0" /><span className="font-display font-semibold truncate">{data?.title || "Loading"}</span></span>
-        <button className="btn-ghost !p-1.5" onClick={onClose} aria-label="Close"><X className="size-4" /></button>
+        <span className="text-xs text-meta">Article</span>
+        <button className="btn-ghost btn-icon" onClick={onClose} aria-label="Close article"><X className="size-4" aria-hidden /></button>
       </div>
-      {loading || !data ? <Spinner /> : (
-        <div className="p-5">
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <Badge tone={TRUST_TONE[data.trust_level] || "ok"} mono>{TRUST_LABEL[data.trust_level] || "VERIFIED"}</Badge>
-            {data.category && <Badge>{data.category}</Badge>}
-            <Badge>{titleCase(data.doc_type)}</Badge>
-            <span className="mono text-xs text-meta self-center">Updated {shortDate(data.updated_at)}</span>
+      {error ? <div className="p-4"><ErrorState message={error} what="the article" onRetry={reload} /></div>
+        : loading || !data ? <div className="p-4"><SkeletonLines lines={8} /></div> : (
+          <div className="p-6">
+            <h2 className="text-lg">{data.title}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <TrustBadge level={data.trust_level} />
+              {data.category && <Badge>{data.category}</Badge>}
+              <Badge>{sentenceCase(data.doc_type)}</Badge>
+              {reviewDue(data.last_reviewed) && <Badge tone="warn">Review due</Badge>}
+            </div>
+            <div className="mt-4 rounded-sm border border-line bg-canvas p-4">
+              <DefinitionList items={[["Owner", data.owner], ["Last reviewed", date(data.last_reviewed)], ["Updated", date(data.updated_at)]]} />
+            </div>
+            <div className="mt-6"><Markdown source={data.content || ""} /></div>
           </div>
-          <Markdown source={data.content || ""} />
-        </div>
-      )}
-    </div>
+        )}
+    </article>
   );
 }
 
-function NewDocument({ onCreated }: { onCreated: (id: number) => void }) {
+function NewDocument({ onCreated, onCancel }: { onCreated: (id: number) => void; onCancel: () => void }) {
   const { data: categories } = useApi<{ id: number; name: string }[]>("/meta/categories");
-  const [form, setForm] = useState({ title: "", content: "## Symptoms\n\n## Resolution\n1. \n", category_id: "", doc_type: "runbook" });
+  const [form, setForm] = useState({ title: "", content: "## Symptoms\n- \n\n## Resolution\n1. \n\n## Escalation criteria\n- \n", category_id: "", doc_type: "runbook" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async (e: FormEvent) => {
@@ -50,30 +59,34 @@ function NewDocument({ onCreated }: { onCreated: (id: number) => void }) {
     try {
       const doc = await api.post<KnowledgeDoc>("/knowledge/documents", { ...form, category_id: form.category_id ? Number(form.category_id) : null });
       onCreated(doc.id);
-    } catch (err) { setError(err instanceof Error ? err.message : "Failed"); } finally { setBusy(false); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Publishing failed"); } finally { setBusy(false); }
   };
   return (
-    <form onSubmit={submit} className="card p-4 space-y-3">
-      <p className="label-caps !text-ink">New knowledge document</p>
-      <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required minLength={3} /></Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Category">
-          <select className="select" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
-            <option value="">General</option>{categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+    <Card title="New article">
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Title" htmlFor="doc-title"><input id="doc-title" className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required minLength={3} /></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Category" htmlFor="doc-category">
+            <select id="doc-category" className="select" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+              <option value="">General</option>{categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Type" htmlFor="doc-type">
+            <select id="doc-type" className="select" value={form.doc_type} onChange={(e) => setForm({ ...form, doc_type: e.target.value })}>
+              {["runbook", "guide", "faq", "policy"].map((t) => <option key={t} value={t}>{t === "faq" ? "FAQ" : sentenceCase(t)}</option>)}
+            </select>
+          </Field>
+        </div>
+        <Field label="Content (Markdown)" htmlFor="doc-content" hint="Each heading becomes a searchable section. Numbered steps under Resolution are shown to employees as the fix.">
+          <textarea id="doc-content" className="input min-h-48 font-mono" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} required minLength={20} />
         </Field>
-        <Field label="Type">
-          <select className="select" value={form.doc_type} onChange={(e) => setForm({ ...form, doc_type: e.target.value })}>
-            {["runbook", "faq", "guide", "policy"].map((t) => <option key={t} value={t}>{titleCase(t)}</option>)}
-          </select>
-        </Field>
-      </div>
-      <Field label="Content (markdown)" hint="Headings split the document into retrievable chunks; numbered steps are shown to employees as procedures.">
-        <textarea className="input min-h-48 mono text-[0.8125rem]" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} required minLength={20} />
-      </Field>
-      <ErrorNote message={error} />
-      <button className="btn-accent w-full" disabled={busy}>{busy ? <Loader2 className="size-4 animate-spin" /> : "Publish & index"}</button>
-    </form>
+        <FormError message={error} />
+        <div className="flex gap-2">
+          <button className="btn-primary" disabled={busy}>{busy && <Spinner />} Publish</button>
+          <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+        </div>
+      </form>
+    </Card>
   );
 }
 
@@ -83,79 +96,109 @@ export default function KnowledgePage() {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [category, setCategory] = useState("");
+  const category = params.get("category") || "";
   const { data: docs, loading, error, reload } = useApi<KnowledgeDoc[]>(`/knowledge/documents${category ? `?category_id=${category}` : ""}`);
   const { data: categories } = useApi<{ id: number; name: string }[]>("/meta/categories");
   const docId = Number(params.get("doc")) || null;
 
+  const setParam = (k: string, v: string | null) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set(k, v); else next.delete(k);
+    setParams(next);
+  };
+
   const search = async (e: FormEvent) => {
     e.preventDefault();
-    if (q.trim().length < 3) return;
-    setSearching(true);
-    try { setResults(await api.get<SearchResult>(`/knowledge/search?q=${encodeURIComponent(q.trim())}`)); } finally { setSearching(false); }
+    if (q.trim().length < 3) { setSearchError("Type at least three characters."); return; }
+    setSearching(true); setSearchError(null);
+    try { setResults(await api.get<SearchResult>(`/knowledge/search?q=${encodeURIComponent(q.trim())}`)); }
+    catch (err) { setSearchError(err instanceof Error ? err.message : "Search failed"); }
+    finally { setSearching(false); }
   };
 
   return (
     <div>
-      <PageHeader title="Knowledge base" subtitle="Verified IT procedures and solutions the agent uses - searchable by meaning, not just keywords."
-        right={isStaff && <button className="btn-outline" onClick={() => setCreating((c) => !c)}><Plus className="size-4" /> New document</button>} />
+      <PageHeader title="Knowledge base"
+        description={`${docs?.length ?? "-"} IT articles and the fixes the help desk agent reuses. Search by describing the problem.`}
+        actions={isStaff && !creating && <button className="btn-secondary" onClick={() => setCreating(true)}><Plus className="size-4" aria-hidden /> New article</button>} />
 
-      <form onSubmit={search} className="card p-3 flex gap-2 mb-5">
-        <div className="relative flex-1">
-          <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-cobalt" />
-          <input className="input pl-9" placeholder="Describe a problem, e.g. 'outlook keeps crashing after update'" value={q} onChange={(e) => setQ(e.target.value)} />
+      <form role="search" onSubmit={search} className="mb-6 flex flex-wrap gap-2">
+        <div className="relative min-w-64 flex-1">
+          <label htmlFor="kb-search" className="sr-only">Describe the problem</label>
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-meta" aria-hidden />
+          <input id="kb-search" className="input pl-8" placeholder="Describe the problem, for example: Outlook keeps asking for my password" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <button className="btn-accent" disabled={searching}>{searching ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />} Search</button>
+        <button className="btn-primary" disabled={searching}>{searching && <Spinner />} Search</button>
       </form>
+      {searchError && <div className="mb-4"><FormError message={searchError} /></div>}
 
-      {creating && <div className="mb-5"><NewDocument onCreated={(id) => { setCreating(false); reload(); setParams({ doc: String(id) }); }} /></div>}
+      {creating && <div className="mb-6"><NewDocument onCancel={() => setCreating(false)} onCreated={(id) => { setCreating(false); reload(); setParam("doc", String(id)); }} /></div>}
 
       {results && (
-        <section className="mb-6">
-          <SectionTitle right={<button className="btn-ghost btn-sm" onClick={() => setResults(null)}>Clear</button>}>Semantic matches</SectionTitle>
-          {!results.documents.length && !results.solutions.length && <Empty title="No confident match">Try describing the symptom differently, or ask the AI agent.</Empty>}
-          <div className="grid gap-3 md:grid-cols-2">
-            {results.solutions.map((s) => (
-              <div key={`s${s.id}`} className="card p-4">
-                <div className="flex justify-between gap-2"><Badge tone={TRUST_TONE[s.confidence_level]} mono>{TRUST_LABEL[s.confidence_level]} SOLUTION</Badge><span className="mono text-xs text-meta">{pct(s.similarity)} match</span></div>
-                <p className="font-display font-semibold mt-2">{s.title}</p>
-                <p className="text-sm text-body mt-1">{s.solution_description}</p>
-                <p className="mono text-[0.6875rem] text-meta mt-2">{s.category} · used {s.times_used}× · {s.success_rate !== null ? `${pct(s.success_rate)} success` : "no outcomes yet"}{s.ticket_number ? ` · from ${s.ticket_number}` : ""}</p>
-              </div>
-            ))}
-            {results.documents.map((d) => (
-              <button key={`d${d.chunk_id}`} className="card card-hover p-4 text-left" onClick={() => setParams({ doc: String(d.document_id) })}>
-                <div className="flex justify-between gap-2"><Badge tone="ok" mono>DOC · {d.ref}</Badge><span className="mono text-xs text-meta">{pct(d.similarity)} match</span></div>
-                <p className="font-display font-semibold mt-2">{d.title}{d.heading ? ` - ${d.heading}` : ""}</p>
-                <p className="text-sm text-body mt-1 line-clamp-3">{d.excerpt}</p>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <div className={`grid gap-4 ${docId ? "lg:grid-cols-[20rem_1fr]" : ""}`}>
-        <section>
-          <SectionTitle right={
-            <select className="rounded border border-line bg-surface px-2 py-1 text-xs" value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">All</option>{categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>}>Documents</SectionTitle>
-          <ErrorNote message={error} />
-          {loading && !docs ? <Spinner /> : !docs?.length ? <Empty title="No documents" icon={<BookOpen className="size-5" />} /> : (
-            <div className={`grid gap-2.5 ${docId ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
-              {docs.map((d) => (
-                <button key={d.id} onClick={() => setParams({ doc: String(d.id) })}
-                  className={`card card-hover p-3.5 text-left ${d.id === docId ? "!border-cobalt ring-1 ring-cobalt" : ""}`}>
-                  <span className="mono text-[0.625rem] uppercase text-meta">{d.category || "General"} · {d.doc_type}</span>
-                  <p className="font-semibold text-sm leading-snug mt-0.5">{d.title}</p>
-                  {!docId && <p className="text-xs text-meta mt-1 line-clamp-2">{d.excerpt}</p>}
+        <Section className="mb-8" title={`Results for "${q.trim()}"`} actions={<button className="btn-ghost btn-sm" onClick={() => setResults(null)}>Clear results</button>}>
+          {!results.documents.length && !results.solutions.length ? (
+            <EmptyState title="Nothing close enough">Try describing what you see on screen, or <Link to="/chat" className="text-brand hover:underline">ask the help desk agent</Link>.</EmptyState>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {results.solutions.map((s) => (
+                <div key={`s${s.id}`} className="card p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><TrustBadge level={s.confidence_level} /><span className="text-xs text-meta">{percent(s.similarity)} match</span></div>
+                  <p className="mt-2 font-medium text-ink">{s.title}</p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-4 text-sm text-body">{s.steps.slice(0, 4).map((st, i) => <li key={i}>{st}</li>)}</ol>
+                  <p className="mt-2 text-xs text-meta">{s.category} · worked {s.times_successful} of {s.times_used} times{s.ticket_number ? ` · from ${s.ticket_number}` : ""}</p>
+                </div>
+              ))}
+              {results.documents.map((d) => (
+                <button key={`d${d.chunk_id}`} className="card p-4 text-left hover:border-line-strong" onClick={() => setParam("doc", String(d.document_id))}>
+                  <div className="flex flex-wrap items-center justify-between gap-2"><Badge tone="brand">Article</Badge><span className="text-xs text-meta">{percent(d.similarity)} match</span></div>
+                  <p className="mt-2 font-medium text-ink">{d.title}</p>
+                  {d.heading && <p className="text-xs text-meta">Section: {d.heading}</p>}
+                  <p className="mt-1 line-clamp-3 text-sm text-body">{d.excerpt}</p>
                 </button>
               ))}
             </div>
           )}
-        </section>
-        {docId && <DocViewer key={docId} id={docId} onClose={() => setParams({})} />}
+        </Section>
+      )}
+
+      <div className={`grid gap-8 ${docId ? "xl:grid-cols-[1fr_1fr]" : ""}`}>
+        <Section title="All articles" actions={
+          <div>
+            <label htmlFor="kb-category" className="sr-only">Category</label>
+            <select id="kb-category" className="select w-48 py-1" value={category} onChange={(e) => setParam("category", e.target.value || null)}>
+              <option value="">All categories</option>{categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>}>
+          <ErrorState message={error} what="articles" onRetry={reload} />
+          {loading && !docs ? <SkeletonTable rows={8} /> : !docs?.length ? (
+            <EmptyState title="No articles in this category" icon={<BookOpen className="size-5" aria-hidden />} />
+          ) : (
+            <div className="card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-line bg-canvas"><tr><th className="th">Article</th><th className="th">Category</th>{!docId && <th className="th">Owner</th>}<th className="th">Last reviewed</th></tr></thead>
+                <tbody className="divide-y divide-line">
+                  {docs.map((d) => (
+                    <tr key={d.id} className={d.id === docId ? "bg-brand-soft" : "hover:bg-canvas"}>
+                      <td className="td">
+                        <button className="text-left font-medium text-ink hover:underline" aria-current={d.id === docId ? "true" : undefined}
+                          onClick={() => setParam("doc", String(d.id))}>{d.title}</button>
+                        {!docId && <p className="mt-1 line-clamp-1 text-xs text-meta">{d.excerpt}</p>}
+                      </td>
+                      <td className="td whitespace-nowrap text-body">{d.category || "General"}</td>
+                      {!docId && <td className="td whitespace-nowrap text-body">{d.owner}</td>}
+                      <td className="td whitespace-nowrap">
+                        <span className={reviewDue(d.last_reviewed) ? "text-warn" : "text-meta"}>{date(d.last_reviewed)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+        {docId && <div className="xl:sticky xl:top-24 xl:self-start"><DocViewer key={docId} id={docId} onClose={() => setParam("doc", null)} /></div>}
       </div>
     </div>
   );

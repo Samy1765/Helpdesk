@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.serializers import iso
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.database import utcnow
@@ -126,6 +127,6 @@ def action_view(action: AgentAction) -> dict:
         "description": spec.description if spec else "", "permission": action.permission_level,
         "risk_note": spec.risk_note if spec else "", "status": action.status,
         "approver_role": action.approver_role, "result": action.result or {},
-        "created_at": action.created_at.isoformat() if action.created_at else None,
+        "created_at": iso(action.created_at),
     }
 

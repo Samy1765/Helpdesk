@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, Loader2, Paperclip, Plus, RotateCcw, TriangleAlert, UserCog, X } from "lucide-react";
+import { Paperclip, RotateCcw, Send, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api, clientEnvironment } from "../services/api";
 import type { ActionView, ChatPayload, ChatReply, Message, Priority } from "../services/types";
-import { Alerts, ApprovalCard, SessionHeader, SimilarList, SolutionCard, TelemetryMatrix, TicketContextCard } from "../components/agent";
-import { ErrorNote, RichText, Spinner, clock } from "../components/ui";
+import {
+  Alerts, ApprovalCard, EscalationNote, IncidentLink, ProgressChecklist, SimilarList, SolutionCard, TicketSummary,
+} from "../components/agent";
+import { ErrorState, FormError, Notice, PageHeader, RichText, SkeletonLines, Spinner } from "../components/ui";
+import { firstName, time } from "../lib/format";
 
 interface Conversation { id: number; stage: string; ticket_id: number | null; ticket_number: string | null; messages: Message[] }
 
-const PRIORITIES: (Priority | "")[] = ["", "low", "medium", "high", "critical"];
+const PRIORITIES: [Priority | "", string][] = [["", "Let the agent assess"], ["low", "Low"], ["medium", "Medium"], ["high", "High"], ["critical", "Critical"]];
 const STARTERS = [
-  "My VPN keeps timing out after I enter my 2FA code",
-  "Outlook crashes every time I open it",
-  "I'm locked out of my account",
-  "The printer on my floor isn't printing",
+  "Outlook closes as soon as I open it",
+  "GlobalProtect VPN drops every few minutes",
+  "My account is locked after a password change",
+  "Print jobs are stuck in the queue",
 ];
 
 function latest<K extends keyof ChatPayload>(messages: Message[], key: K): ChatPayload[K] | undefined {
@@ -25,66 +28,50 @@ function latest<K extends keyof ChatPayload>(messages: Message[], key: K): ChatP
   return undefined;
 }
 
-function Bubble({ m, isLast, busy, onQuick, onFixed, onTriage, onDecide }: {
-  m: Message; isLast: boolean; busy: boolean; onQuick: (t: string) => void; onFixed: () => void; onTriage: () => void;
+function author(m: Message): string {
+  if (m.role === "user") return "You";
+  if (m.role === "agent") return m.author ? `${m.author} (IT support)` : "IT support";
+  if (m.role === "system") return "Update";
+  return "Help desk agent";
+}
+
+function MessageItem({ m, isLast, busy, onQuick, onDecide }: {
+  m: Message; isLast: boolean; busy: boolean; onQuick: (t: string) => void;
   onDecide: (a: ActionView, approve: boolean) => Promise<void>;
 }) {
-  const { user } = useAuth();
-  if (m.role === "user") {
-    return (
-      <div className="flex flex-col items-end">
-        <span className="mono text-[0.625rem] uppercase text-meta mb-1">{user?.username} · {clock(m.created_at)}</span>
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-cobalt px-3.5 py-2.5 text-sm text-white shadow-hover">
-          <RichText text={m.content} />
-          {!!m.payload?.attachments?.length && (
-            <p className="mt-1.5 flex items-center gap-1 text-xs text-white/80"><Paperclip className="size-3" /> {m.payload.attachments.map((a) => a.filename).join(", ")}</p>
+  const mine = m.role === "user";
+  const p = m.payload || {};
+  return (
+    <li className={`flex flex-col gap-2 ${mine ? "items-end" : "items-start"}`}>
+      <p className="text-xs text-meta">{author(m)} · {time(m.created_at)}</p>
+      <div className={`max-w-2xl rounded-md px-4 py-2 text-sm ${mine ? "bg-brand text-white" : "border border-line bg-surface text-body"}`}>
+        <RichText text={m.content} />
+        {!!p.attachments?.length && (
+          <p className={`mt-1 flex items-center gap-1 text-xs ${mine ? "text-white" : "text-meta"}`}>
+            <Paperclip className="size-3" aria-hidden /> {p.attachments.map((a) => a.filename).join(", ")}
+          </p>
+        )}
+      </div>
+      {!mine && (
+        <div className="w-full max-w-2xl space-y-2">
+          <Alerts alerts={p.alerts?.filter((a) => a.type !== "escalation" && a.type !== "incident")} />
+          {p.solution && <SolutionCard solution={p.solution} />}
+          {p.approvals?.map((a) => <ApprovalCard key={a.id} action={a} disabled={!isLast || busy} onDecide={(ok) => onDecide(a, ok)} />)}
+          {p.escalation && <EscalationNote department={p.escalation.department} assignee={p.escalation.assignee} />}
+          {p.incident && <IncidentLink number={p.incident.number} title={p.incident.title} />}
+          {p.ticket && !p.escalation && !p.incident && isLast && p.agent?.state !== "verify" && (
+            <Link to={`/tickets/${p.ticket.id}`} className="btn-secondary btn-sm">Open ticket {p.ticket.number}</Link>
+          )}
+          {isLast && !!p.quick_replies?.length && (
+            <div className="flex flex-wrap gap-2 pt-1" role="group" aria-label="Suggested replies">
+              {p.quick_replies.map((q) => (
+                <button key={q} disabled={busy} onClick={() => onQuick(q)} className="btn-secondary btn-sm">{q}</button>
+              ))}
+            </div>
           )}
         </div>
-      </div>
-    );
-  }
-  const p = m.payload || {};
-  const verify = isLast && p.agent?.state === "verify";
-  return (
-    <div className="flex flex-col items-start gap-2 max-w-full">
-      <span className="flex items-center gap-1.5 mono text-[0.625rem] uppercase text-cobalt">
-        <span className="flex size-4 items-center justify-center rounded-sm bg-cobalt text-[0.5rem] font-bold text-white">P</span>
-        {m.role === "agent" ? `IT support${m.author ? ` · ${m.author}` : ""}` : m.role === "system" ? "System" : "Precision core agent"}
-        <span className="text-meta">{clock(m.created_at)}</span>
-      </span>
-      <div className="w-full sm:max-w-[92%] space-y-2">
-        <div className="card px-3.5 py-3 text-sm text-body leading-relaxed"><RichText text={m.content} /></div>
-        <Alerts alerts={p.alerts} />
-        {p.solution && <SolutionCard solution={p.solution} active={verify} busy={busy} onFixed={onFixed} onTriage={onTriage} />}
-        {p.approvals?.map((a) => <ApprovalCard key={a.id} action={a} disabled={!isLast || busy} onDecide={(ok) => onDecide(a, ok)} />)}
-        {p.escalation && (
-          <div className="rounded-lg border border-violet-line bg-violet-soft p-3.5 text-sm">
-            <p className="label-caps !text-violet flex items-center gap-2"><UserCog className="size-4" /> Escalated to human support</p>
-            <p className="mt-1.5 text-body"><span className="font-semibold text-ink">{p.escalation.department}</span>{p.escalation.assignee ? ` · assigned to ${p.escalation.assignee}` : " · awaiting assignment"}</p>
-          </div>
-        )}
-        {p.incident && (
-          <Link to={`/incidents?number=${p.incident.number}`} className="flex items-center justify-between gap-2 rounded-lg border border-crit-line bg-crit-soft p-3.5 text-sm hover:border-crit">
-            <span><span className="mono font-semibold text-crit-ink">{p.incident.number}</span><span className="block text-body">{p.incident.title}</span></span>
-            <ArrowRight className="size-4 text-crit" />
-          </Link>
-        )}
-        {p.ticket && !p.escalation && !p.incident && isLast && p.agent?.state !== "verify" && (
-          <Link to={`/tickets/${p.ticket.id}`} className="btn-outline btn-sm">View ticket {p.ticket.number} <ArrowRight className="size-3.5" /></Link>
-        )}
-        {isLast && !!p.quick_replies?.length && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {p.quick_replies.map((q, i) => (
-              <button key={q} disabled={busy} onClick={() => onQuick(q)}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[0.8125rem] font-medium transition-colors disabled:opacity-50 ${
-                  /still|no,/i.test(q) ? "border-crit-line bg-surface text-crit-ink hover:bg-crit-soft" : "border-cobalt-line bg-surface text-cobalt hover:bg-cobalt-soft"}`}>
-                <span className={`dot size-1.5 ${/still|no,/i.test(q) ? "bg-crit" : i === 0 ? "bg-cobalt" : "bg-cobalt/60"}`} />{q}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </li>
   );
 }
 
@@ -97,23 +84,23 @@ export default function ChatPage() {
   const [files, setFiles] = useState<{ token: string; filename: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showTelemetry, setShowTelemetry] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoadError(null);
     api.get<Conversation>("/chat/conversation").then((c) => { setConv(c); setMessages(c.messages); })
-      .catch((e) => setError(e.message));
-  }, []);
-  useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
+      .catch((e) => setLoadError(e.message));
+  };
+  useEffect(load, []);
+  useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [messages, busy]);
 
   const progress = latest(messages, "progress");
   const ticket = latest(messages, "ticket");
   const agent = latest(messages, "agent");
   const assessment = latest(messages, "priority_assessment");
   const similar = latest(messages, "similar");
-  const solution = latest(messages, "solution");
-  const lastPayload = useMemo(() => ({ ticket, classification: latest(messages, "classification") }), [messages, ticket]);
 
   const append = (m: Partial<Message>) => setMessages((prev) => [...prev, {
     id: m.id ?? -Date.now() - Math.random(), role: m.role || "assistant", content: m.content || "", payload: m.payload || {},
@@ -134,7 +121,7 @@ export default function ChatPage() {
       if (conv && r.conversation_id !== conv.id) setConv({ ...conv, id: r.conversation_id });
       append({ id: r.message_id ?? undefined, role: "assistant", content: r.message, payload: { ...r.payload, quick_replies: r.quick_replies } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Message failed");
+      setError(`Your message was not sent: ${e instanceof Error ? e.message : "request failed"}. Try again.`);
     } finally {
       setBusy(false);
     }
@@ -143,19 +130,21 @@ export default function ChatPage() {
   const submit = (e: FormEvent) => { e.preventDefault(); send(text); };
 
   const newChat = async () => {
-    const c = await api.post<Conversation>("/chat/new");
-    setConv({ ...c, ticket_id: null, ticket_number: null });
-    setMessages([]);
-    setPriority("");
+    try {
+      const c = await api.post<Conversation>("/chat/new");
+      setConv({ ...c, ticket_id: null, ticket_number: null });
+      setMessages([]);
+      setPriority("");
+      setError(null);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not start a new conversation"); }
   };
 
-  const triage = async () => {
+  const talkToPerson = async () => {
     if (!ticket) return;
     setBusy(true);
     try {
       const r = await api.post<{ message: string }>(`/tickets/${ticket.id}/request-human`);
-      append({ role: "system", content: `${r.message}. A human IT agent now owns ${ticket.number}; you can follow progress on the ticket page.`,
-        payload: { alerts: [{ type: "escalation", message: "Manual triage requested." }] } });
+      append({ role: "system", content: `${r.message}. An IT engineer now owns ${ticket.number}; follow it on the ticket page.` });
     } catch (e) { setError(e instanceof Error ? e.message : "Request failed"); }
     finally { setBusy(false); }
   };
@@ -175,95 +164,91 @@ export default function ChatPage() {
     try {
       const r = await api.post<{ token: string; filename: string }>("/attachments", fd);
       setFiles((f) => [...f, r]);
-    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed"); }
+    } catch (e) { setError(`${file.name} was not attached: ${e instanceof Error ? e.message : "upload failed"}`); }
   };
 
-  if (!conv && !error) return <Spinner label="Connecting to agent" />;
-
-  const inspector = (
-    <div className="space-y-3">
-      {progress && <TelemetryMatrix steps={progress} routing={agent?.routing_level} model={solution?.model} />}
-      {ticket && <TicketContextCard ticket={ticket} assessment={assessment} />}
-      <SimilarList items={similar} />
-      {!progress && (
-        <div className="card p-4 text-sm text-meta">
-          <p className="label-caps !text-ink mb-1.5">How this works</p>
-          The agent classifies your issue, checks for duplicates and outages, searches verified fixes, and only then asks an AI model - escalating to the right team if it can't solve it safely.
-        </div>
-      )}
-    </div>
-  );
+  const canTalkToPerson = ticket && ticket.status !== "escalated" && ticket.status !== "assigned" && ticket.status !== "in_progress"
+    && !["resolved", "closed", "duplicate", "linked_incident"].includes(ticket.status);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
-      <div className="min-w-0 flex flex-col">
-        <div className="space-y-3">
-          <SessionHeader conversationId={conv?.id ?? null} payload={lastPayload} />
-          {progress && (
-            <button className="lg:hidden btn-outline w-full justify-between" onClick={() => setShowTelemetry((s) => !s)}>
-              <span className="label-caps !text-ink">Agent telemetry & ticket context</span>
-              <ChevronDown className={`size-4 transition-transform ${showTelemetry ? "rotate-180" : ""}`} />
-            </button>
-          )}
-          {showTelemetry && <div className="lg:hidden">{inspector}</div>}
-        </div>
+    <div>
+      <PageHeader title="Get help"
+        description="Describe the problem in your own words. The agent asks at most two questions, tries known fixes first and passes the ticket to the right IT team if it can't solve it."
+        actions={<>
+          {canTalkToPerson && <button className="btn-secondary" disabled={busy} onClick={talkToPerson}>Talk to a person</button>}
+          <button className="btn-secondary" onClick={newChat}><RotateCcw className="size-4" aria-hidden /> New conversation</button>
+        </>} />
 
-        <div className="flex-1 space-y-5 py-5">
-          {!messages.length && (
-            <div className="card p-5">
-              <p className="font-display font-semibold text-[1.0625rem]">Hi {user?.full_name.split(" ")[0]}, what's going wrong?</p>
-              <p className="text-sm text-meta mt-1">Describe the problem in your own words. I'll ask only what I need, then try verified fixes before involving IT.</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                {STARTERS.map((s) => (
-                  <button key={s} className="text-left rounded border border-line px-3 py-2.5 text-sm text-body hover:border-cobalt-line hover:bg-cobalt-soft" onClick={() => send(s)}>{s}</button>
-                ))}
+      <div className="grid gap-8 xl:grid-cols-[1fr_20rem]">
+        <div className="min-w-0">
+          <div className="card flex min-h-96 flex-col">
+            <div className="flex-1 p-4" aria-live="polite">
+              {loadError ? <ErrorState message={loadError} what="the conversation" onRetry={load} />
+                : !conv ? <SkeletonLines lines={4} />
+                  : !messages.length ? (
+                    <div className="py-8">
+                      <p className="text-base font-semibold text-ink">What's not working, {firstName(user?.full_name)}?</p>
+                      <p className="mt-1 text-sm text-meta">Include any error message you see. Some common requests:</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {STARTERS.map((s) => <button key={s} className="btn-secondary btn-sm" onClick={() => send(s)}>{s}</button>)}
+                      </div>
+                    </div>
+                  ) : (
+                    <ol className="space-y-6">
+                      {messages.map((m, i) => (
+                        <MessageItem key={m.id} m={m} isLast={i === messages.length - 1} busy={busy} onQuick={send} onDecide={decide} />
+                      ))}
+                    </ol>
+                  )}
+              {busy && <p className="mt-4 flex items-center gap-2 text-sm text-meta"><Spinner /> Checking known fixes and similar tickets</p>}
+              <div ref={bottom} />
+            </div>
+
+            <form onSubmit={submit} className="border-t border-line p-4">
+              {error && <div className="mb-2"><FormError message={error} /></div>}
+              {!!files.length && (
+                <ul className="mb-2 flex flex-wrap gap-2" aria-label="Attached files">
+                  {files.map((f) => (
+                    <li key={f.token} className="badge border-line bg-muted text-body">
+                      <Paperclip className="size-3" aria-hidden />{f.filename}
+                      <button type="button" onClick={() => setFiles(files.filter((x) => x.token !== f.token))} aria-label={`Remove ${f.filename}`}><X className="size-3" aria-hidden /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <label htmlFor="message" className="sr-only">Describe your problem</label>
+              <textarea id="message" className="input min-h-20 resize-y" placeholder="For example: Outlook closes as soon as I open it, since this morning's update"
+                value={text} onChange={(e) => setText(e.target.value)} disabled={busy} maxLength={4000}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }} />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="btn-ghost btn-sm" onClick={() => fileInput.current?.click()}>
+                    <Paperclip className="size-4" aria-hidden /> Attach screenshot or log
+                  </button>
+                  <input ref={fileInput} type="file" className="hidden" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.log"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
+                  <label className="flex items-center gap-2 text-sm text-meta" htmlFor="urgency">
+                    How urgent is it for you?
+                    <select id="urgency" className="select w-auto py-1" value={priority} onChange={(e) => setPriority(e.target.value as Priority | "")}>
+                      {PRIORITIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <button className="btn-primary" disabled={busy || !text.trim()}><Send className="size-4" aria-hidden /> Send</button>
               </div>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <Bubble key={m.id} m={m} isLast={i === messages.length - 1} busy={busy} onQuick={send}
-              onFixed={() => send("Yes, it's fixed")} onTriage={triage} onDecide={decide} />
-          ))}
-          {busy && (
-            <div className="flex items-center gap-2 mono text-xs text-cobalt">
-              <Loader2 className="size-3.5 animate-spin" /> Precision core agent is analysing - classifying, checking duplicates, searching knowledge…
-            </div>
-          )}
-          <ErrorNote message={error} />
-          <div ref={bottom} />
+              <p className="mt-2 text-xs text-meta">Enter sends, Shift+Enter adds a line. Never type passwords or codes here; IT will not ask for them.</p>
+            </form>
+          </div>
         </div>
 
-        <form onSubmit={submit} className="sticky bottom-20 lg:bottom-4 z-10 card shadow-pop p-2">
-          {!!files.length && (
-            <div className="flex flex-wrap gap-1.5 px-1 pb-2">
-              {files.map((f) => (
-                <span key={f.token} className="code-chip flex items-center gap-1"><Paperclip className="size-3" />{f.filename}
-                  <button type="button" onClick={() => setFiles(files.filter((x) => x.token !== f.token))} aria-label="Remove"><X className="size-3" /></button></span>
-              ))}
-            </div>
+        <aside className="space-y-4" aria-label="Ticket details">
+          {ticket ? <TicketSummary ticket={ticket} assessment={assessment} /> : (
+            <Notice tone="info">A ticket is created as soon as the agent understands the problem. You can follow it here and on the Tickets page.</Notice>
           )}
-          <div className="flex items-center gap-2">
-            <button type="button" className="btn-outline !p-2" onClick={() => fileInput.current?.click()} aria-label="Attach screenshot or log"><Plus className="size-4" /></button>
-            <input ref={fileInput} type="file" className="hidden" accept="image/*,.pdf,.txt,.log"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
-            <input className="input" placeholder="Type IT issue or terminal command..." value={text} onChange={(e) => setText(e.target.value)} disabled={busy} maxLength={4000} />
-            <button className="btn-accent !p-2.5" disabled={busy || !text.trim()} aria-label="Send">{busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}</button>
-          </div>
-          <div className="flex items-center justify-between gap-2 px-1 pt-2">
-            <label className="flex items-center gap-2 text-xs text-meta">
-              <TriangleAlert className="size-3.5" /> Your priority
-              <select className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-body" value={priority} onChange={(e) => setPriority(e.target.value as Priority | "")}>
-                {PRIORITIES.map((p) => <option key={p} value={p}>{p ? p[0].toUpperCase() + p.slice(1) : "Let AI assess"}</option>)}
-              </select>
-            </label>
-            <button type="button" className="btn-ghost btn-sm" onClick={newChat}><RotateCcw className="size-3.5" /> New chat</button>
-          </div>
-        </form>
+          {progress && <ProgressChecklist steps={progress} routing={agent?.routing_level} />}
+          <SimilarList items={similar} />
+        </aside>
       </div>
-
-      <aside className="hidden lg:block">
-        <div className="sticky top-20">{inspector}</div>
-      </aside>
     </div>
   );
 }

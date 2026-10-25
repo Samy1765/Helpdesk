@@ -1,211 +1,263 @@
 import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, Loader2, RotateCw } from "lucide-react";
 import type { Priority } from "../services/types";
+import type { Tone } from "../lib/format";
 
-/* ---------------- formatting ---------------- */
-export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return "-";
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 86400 * 2) return "Yesterday";
-  return `${Math.floor(s / 86400)} days ago`;
-}
-
-export function clock(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-export function shortDate(iso: string | null | undefined): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
-}
-
-export function duration(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined) return "-";
-  const m = Math.abs(minutes);
-  if (m < 60) return `${Math.round(m)}m`;
-  if (m < 60 * 48) return `${(m / 60).toFixed(m < 600 ? 1 : 0)}h`;
-  return `${Math.round(m / 1440)}d`;
-}
-
-export const pct = (v: number | null | undefined, digits = 0) =>
-  v === null || v === undefined ? "-" : `${(v * 100).toFixed(digits)}%`;
-
-export const titleCase = (s: string | null | undefined) =>
-  (s || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-
-/* ---------------- badges ---------------- */
-type Tone = "neutral" | "info" | "ok" | "warn" | "crit" | "violet" | "cobalt" | "solidCrit" | "ink";
-const TONES: Record<Tone, string> = {
+/* ---------------- labels ---------------- */
+const TONES: Record<Tone | "critSolid", string> = {
   neutral: "bg-muted border-line text-body",
-  info: "bg-info-soft border-info-line text-info",
-  cobalt: "bg-cobalt-soft border-cobalt-line text-[#1d4ed8]",
-  ok: "bg-ok-soft border-ok-line text-ok-ink",
-  warn: "bg-warn-soft border-warn-line text-warn-ink",
+  brand: "bg-brand-soft border-brand-line text-brand",
+  ok: "bg-ok-soft border-ok-line text-ok",
+  warn: "bg-warn-soft border-warn-line text-warn",
   crit: "bg-crit-soft border-crit-line text-crit",
-  violet: "bg-violet-soft border-violet-line text-violet",
-  solidCrit: "bg-crit border-crit text-white",
-  ink: "bg-ink border-ink text-white",
+  critSolid: "bg-crit border-crit text-white",
 };
 
-export function Badge({ tone = "neutral", children, dot, mono, className = "" }:
-  { tone?: Tone; children: ReactNode; dot?: boolean; mono?: boolean; className?: string }) {
-  return (
-    <span className={`badge ${TONES[tone]} ${mono ? "font-mono tracking-normal" : ""} ${className}`}>
-      {dot && <span className="dot size-1.5 bg-current" />}
-      {children}
-    </span>
-  );
+export function Badge({ tone = "neutral", children, className = "" }:
+  { tone?: Tone | "critSolid"; children: ReactNode; className?: string }) {
+  return <span className={`badge ${TONES[tone]} ${className}`}>{children}</span>;
 }
 
 const STATUS: Record<string, [string, Tone]> = {
   new: ["New", "neutral"],
-  ai_analysis: ["AI Analysis", "cobalt"],
-  troubleshooting: ["AI Troubleshooting", "cobalt"],
-  awaiting_user: ["Awaiting Confirmation", "warn"],
-  awaiting_approval: ["Awaiting Approval", "warn"],
-  escalated: ["Escalated to IT", "violet"],
-  assigned: ["Assigned to IT", "violet"],
-  in_progress: ["In Progress", "violet"],
+  ai_analysis: ["Agent working", "brand"],
+  troubleshooting: ["Agent working", "brand"],
+  awaiting_user: ["Waiting on employee", "warn"],
+  awaiting_approval: ["Waiting for approval", "warn"],
+  escalated: ["Escalated", "brand"],
+  assigned: ["Assigned", "brand"],
+  in_progress: ["In progress", "brand"],
   resolved: ["Resolved", "ok"],
   closed: ["Closed", "neutral"],
   duplicate: ["Duplicate", "neutral"],
-  linked_incident: ["Linked to Incident", "crit"],
+  linked_incident: ["Part of incident", "warn"],
   active: ["Active", "crit"],
   investigating: ["Investigating", "warn"],
+  pending_approval: ["Waiting for approval", "warn"],
+  approved: ["Approved", "ok"],
+  rejected: ["Declined", "neutral"],
 };
 
+export function statusLabel(status: string): string {
+  return (STATUS[status] || [status.replace(/_/g, " ")])[0];
+}
+
 export function StatusBadge({ status }: { status: string }) {
-  const [label, tone] = STATUS[status] || [titleCase(status), "neutral" as Tone];
+  const [label, tone] = STATUS[status] || [status.replace(/_/g, " "), "neutral" as Tone];
   return <Badge tone={tone}>{label}</Badge>;
 }
 
-const PRIORITY: Record<Priority, [string, Tone]> = {
-  low: ["Low", "neutral"], medium: ["Med", "warn"], high: ["High", "crit"], critical: ["Critical", "solidCrit"],
+const PRIORITY: Record<Priority, [string, Tone | "critSolid"]> = {
+  critical: ["Critical", "critSolid"], high: ["High", "crit"], medium: ["Medium", "warn"], low: ["Low", "neutral"],
 };
 
-export function PriorityBadge({ priority, long }: { priority: Priority | null | undefined; long?: boolean }) {
+export function PriorityBadge({ priority }: { priority: Priority | null | undefined }) {
   if (!priority) return null;
   const [label, tone] = PRIORITY[priority];
-  return <Badge tone={tone} dot={long}>{long ? `Priority: ${titleCase(priority)}` : label}</Badge>;
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
-export function priorityTone(p: Priority | null | undefined): string {
-  return p === "critical" || p === "high" ? "text-crit" : p === "medium" ? "text-warn-ink" : "text-body";
-}
+export const priorityLabel = (p: Priority | null | undefined) => (p ? PRIORITY[p][0] : "Not set");
 
 export function TicketId({ number, to }: { number: string; to?: string }) {
-  const chip = <span className="mono text-[0.8125rem] font-medium text-cobalt">{number}</span>;
-  return to ? <Link to={to} className="hover:underline">{chip}</Link> : chip;
+  return to ? <Link to={to} className="ticket-id hover:underline">{number}</Link> : <span className="ticket-id">{number}</span>;
 }
 
-export function SolutionLabel({ label }: { label: string }) {
-  const tone: Tone = label.startsWith("VERIFIED") ? "ok" : label.startsWith("HUMAN") ? "ok"
-    : label.startsWith("USER") ? "info" : "warn";
-  return <Badge tone={tone} mono>{label}</Badge>;
+/** Trust label for knowledge: who stands behind a fix */
+const TRUST: Record<string, [string, Tone]> = {
+  admin_verified: ["Verified by IT", "ok"], human_verified: ["Verified by IT", "ok"],
+  user_confirmed: ["Confirmed by employees", "brand"], ai_generated: ["AI suggestion, not reviewed", "warn"],
+};
+
+export function TrustBadge({ level }: { level: string }) {
+  const [label, tone] = TRUST[level] || ["Unreviewed", "neutral"];
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
-/* ---------------- layout pieces ---------------- */
-export function SectionTitle({ children, right, icon }: { children: ReactNode; right?: ReactNode; icon?: ReactNode }) {
+/** Map the agent's provenance labels (VERIFIED SOLUTION ...) to the same wording */
+export function provenance(label: string): string {
+  if (label.startsWith("VERIFIED") || label.startsWith("HUMAN")) return "admin_verified";
+  if (label.startsWith("USER")) return "user_confirmed";
+  return "ai_generated";
+}
+
+/* ---------------- page structure ---------------- */
+export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2 mb-2.5">
-      <h2 className="label-caps !text-body flex items-center gap-2">{icon}{children}</h2>
-      {right}
-    </div>
-  );
-}
-
-export function PageHeader({ eyebrow, title, subtitle, right }:
-  { eyebrow?: ReactNode; title: string; subtitle?: string; right?: ReactNode }) {
-  return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        {eyebrow && <div className="mb-1.5">{eyebrow}</div>}
-        <h1 className="text-[1.375rem] md:text-[1.75rem] font-semibold tracking-[-0.02em] leading-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-meta mt-1">{subtitle}</p>}
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-xl">{title}</h1>
+        {description && <p className="mt-1 text-sm text-meta">{description}</p>}
       </div>
-      {right}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
 
-export function StatTile({ label, value, sub, icon, tone = "default", to }:
-  { label: string; value: ReactNode; sub?: ReactNode; icon?: ReactNode; tone?: "default" | "crit"; to?: string }) {
+export function Section({ title, description, actions, children, className = "" }:
+  { title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section className={className}>
+      <div className="mb-2 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-base">{title}</h2>
+          {description && <p className="text-sm text-meta">{description}</p>}
+        </div>
+        {actions}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function Card({ title, actions, children, className = "", bodyClassName = "p-4" }:
+  { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
+  return (
+    <section className={`card ${className}`}>
+      {(title || actions) && (
+        <div className="card-header">
+          {typeof title === "string" ? <h2 className="card-title">{title}</h2> : title}
+          {actions}
+        </div>
+      )}
+      <div className={bodyClassName}>{children}</div>
+    </section>
+  );
+}
+
+export function StatTile({ label, value, hint, tone, to }:
+  { label: string; value: ReactNode; hint?: ReactNode; tone?: "crit"; to?: string }) {
   const body = (
-    <div className={`card card-hover p-3.5 h-full ${tone === "crit" ? "!bg-crit-soft !border-crit-line" : ""}`}>
-      <div className="flex items-start justify-between gap-2">
-        <span className={`text-[0.8125rem] font-medium ${tone === "crit" ? "text-crit-ink" : "text-body"}`}>{label}</span>
-        {icon}
-      </div>
-      <div className={`mt-1 font-display text-[1.75rem] font-semibold leading-none ${tone === "crit" ? "text-crit" : ""}`}>{value}</div>
-      {sub && <div className="mt-1.5">{sub}</div>}
+    <div className={`card h-full p-4 ${to ? "hover:border-line-strong" : ""}`}>
+      <p className="text-sm text-meta">{label}</p>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${tone === "crit" ? "text-crit" : "text-ink"}`}>{value}</p>
+      {hint && <p className="mt-1 text-xs text-meta">{hint}</p>}
     </div>
   );
   return to ? <Link to={to} className="block">{body}</Link> : body;
 }
 
-export function ProgressBar({ value, tone = "cobalt", split }: { value: number; tone?: "cobalt" | "ok" | "warn" | "crit"; split?: number }) {
-  const color = { cobalt: "bg-cobalt", ok: "bg-ok", warn: "bg-warn", crit: "bg-crit" }[tone];
+export function DefinitionList({ items }: { items: [string, ReactNode][] }) {
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      {items.map(([k, v]) => (
+        <Fragment key={k}>
+          <dt className="text-meta">{k}</dt>
+          <dd className="text-ink min-w-0">{v}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+export function ProgressBar({ value, tone = "brand", label }: { value: number; tone?: Tone; label: string }) {
+  const color = { neutral: "bg-faint", brand: "bg-brand", ok: "bg-ok-dot", warn: "bg-warn-dot", crit: "bg-crit" }[tone];
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className="h-1.5 w-full rounded-sm bg-muted overflow-hidden flex">
-      {split !== undefined ? (
-        <>
-          <div className="h-full bg-cobalt" style={{ width: `${Math.min(v, split)}%` }} />
-          {v > split && <div className="h-full bg-warn" style={{ width: `${v - split}%` }} />}
-        </>
-      ) : <div className={`h-full ${color} transition-[width] duration-500`} style={{ width: `${v}%` }} />}
+    <div className="h-2 w-full overflow-hidden rounded-sm bg-muted" role="progressbar" aria-label={label}
+      aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
+      <div className={`h-full ${color}`} style={{ width: `${v}%` }} />
     </div>
   );
 }
 
-export function Spinner({ label }: { label?: string }) {
+/* ---------------- states ---------------- */
+export function Spinner({ className = "size-4" }: { className?: string }) {
+  return <Loader2 className={`${className} animate-spin`} aria-hidden />;
+}
+
+export function SkeletonLines({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-10 text-sm text-meta">
-      <Loader2 className="size-4 animate-spin" /> {label || "Loading"}
+    <div className="space-y-2" aria-hidden>
+      {Array.from({ length: lines }, (_, i) => <div key={i} className="skeleton h-4" style={{ width: `${92 - i * 14}%` }} />)}
     </div>
   );
 }
 
-export function Empty({ title, children, icon }: { title: string; children?: ReactNode; icon?: ReactNode }) {
+export function SkeletonPage({ tiles = 4, rows = 6 }: { tiles?: number; rows?: number }) {
   return (
-    <div className="card px-6 py-10 text-center">
-      {icon && <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-lg bg-muted text-meta">{icon}</div>}
-      <p className="font-display font-semibold">{title}</p>
-      {children && <div className="text-sm text-meta mt-1">{children}</div>}
+    <div className="space-y-6" role="status" aria-label="Loading">
+      <div className="space-y-2"><div className="skeleton h-8 w-64" /><div className="skeleton h-4 w-96 max-w-full" /></div>
+      {tiles > 0 && (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: tiles }, (_, i) => <div key={i} className="card h-24 p-4"><div className="skeleton h-4 w-24" /><div className="skeleton mt-4 h-6 w-16" /></div>)}
+        </div>
+      )}
+      <SkeletonTable rows={rows} />
     </div>
   );
 }
 
-export function ErrorNote({ message }: { message: string | null }) {
+export function SkeletonTable({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="card divide-y divide-line" aria-hidden>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-4 px-4 py-3">
+          <div className="skeleton h-4 w-24" /><div className="skeleton h-4 flex-1" /><div className="skeleton h-4 w-20" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function EmptyState({ title, children, action, icon }:
+  { title: string; children?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
+  return (
+    <div className="card px-6 py-12 text-center">
+      {icon && <div className="mx-auto mb-4 flex size-10 items-center justify-center rounded-md bg-muted text-meta">{icon}</div>}
+      <p className="text-base font-semibold text-ink">{title}</p>
+      {children && <div className="mx-auto mt-1 max-w-md text-sm text-meta">{children}</div>}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
+    </div>
+  );
+}
+
+const NOTICE: Record<"info" | "ok" | "warn" | "crit", [string, typeof Info]> = {
+  info: ["border-brand-line bg-brand-soft text-ink", Info],
+  ok: ["border-ok-line bg-ok-soft text-ok", CheckCircle2],
+  warn: ["border-warn-line bg-warn-soft text-warn", AlertCircle],
+  crit: ["border-crit-line bg-crit-soft text-crit", AlertCircle],
+};
+
+export function Notice({ tone = "info", children, action }: { tone?: keyof typeof NOTICE; children: ReactNode; action?: ReactNode }) {
+  const [cls, Icon] = NOTICE[tone];
+  return (
+    <div className={`flex items-start gap-2 rounded-sm border px-3 py-2 text-sm ${cls}`} role={tone === "crit" ? "alert" : "status"}>
+      <span className="flex h-5 shrink-0 items-center"><Icon className="size-4" aria-hidden /></span>
+      <div className="min-w-0 flex-1">{children}</div>
+      {action}
+    </div>
+  );
+}
+
+/** A failed request: says what failed and offers a retry instead of a dead end */
+export function ErrorState({ message, what = "this page", onRetry }: { message: string | null; what?: string; onRetry?: () => void }) {
   if (!message) return null;
-  return <div className="rounded border border-crit-line bg-crit-soft px-3 py-2 text-sm text-crit-ink">{message}</div>;
-}
-
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
-    <label className="block">
-      <span className="label-caps block mb-1.5">{label}</span>
-      {children}
-      {hint && <span className="text-xs text-meta mt-1 block">{hint}</span>}
-    </label>
+    <Notice tone="crit" action={onRetry && (
+      <button className="btn-secondary btn-sm" onClick={onRetry}><RotateCw className="size-4" aria-hidden /> Try again</button>)}>
+      <p className="font-medium">Couldn't load {what}.</p>
+      <p className="text-body">{message}</p>
+    </Notice>
   );
 }
 
-export function KeyValue({ k, v, mono }: { k: string; v: ReactNode; mono?: boolean }) {
+export function FormError({ message }: { message: string | null }) {
+  return message ? <Notice tone="crit">{message}</Notice> : null;
+}
+
+export function Field({ label, hint, children, htmlFor }: { label: string; hint?: string; children: ReactNode; htmlFor?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded border border-line bg-surface px-3 py-2">
-      <span className="label-caps">{k}</span>
-      <span className={`text-sm text-right ${mono ? "mono text-[0.8125rem]" : ""}`}>{v}</span>
+    <div>
+      <label className="field-label" htmlFor={htmlFor}>{label}</label>
+      {children}
+      {hint && <p className="mt-1 text-xs text-meta">{hint}</p>}
     </div>
   );
 }
 
-/* Minimal, safe rich text: **bold** and line breaks rendered as React nodes (never raw HTML). */
+/* Minimal rich text: **bold** and line breaks rendered as React nodes (never raw HTML). */
 export function RichText({ text, className = "" }: { text: string; className?: string }) {
   return (
     <div className={`whitespace-pre-wrap break-words ${className}`}>
@@ -225,8 +277,23 @@ export function RichText({ text, className = "" }: { text: string; className?: s
 export function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <span className={`inline-flex items-center justify-center rounded-full border border-line bg-muted font-semibold text-body ${size === "sm" ? "size-7 text-[0.6875rem]" : "size-9 text-xs"}`}>
+    <span aria-hidden className={`inline-flex shrink-0 items-center justify-center rounded-full bg-muted font-medium text-body ${size === "sm" ? "size-6 text-xs" : "size-8 text-xs"}`}>
       {initials}
     </span>
+  );
+}
+
+/** Segmented control for views and filters (one selected option, keyboard accessible as a radio group) */
+export function Segmented<T extends string>({ value, onChange, options, label }:
+  { value: T; onChange: (v: T) => void; options: [T, string][]; label: string }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-sm border border-line-strong bg-surface p-1">
+      {options.map(([k, text]) => (
+        <button key={k} role="radio" aria-checked={value === k} onClick={() => onChange(k)}
+          className={`rounded-sm px-3 py-1 text-sm font-medium ${value === k ? "bg-brand text-white" : "text-body hover:bg-muted"}`}>
+          {text}
+        </button>
+      ))}
+    </div>
   );
 }

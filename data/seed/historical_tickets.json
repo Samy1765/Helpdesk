@@ -2,10 +2,10 @@
   "_comment": "Synthetic historical tickets (no real personal data). 'resolution.level' sets the knowledge trust level; tickets sharing a 'group' are near-duplicates of each other.",
   "tickets": [
     {"user": "arivera", "category": "VPN", "group": "vpn-mfa", "days_ago": 12, "hours_to_resolve": 0.4, "priority": "medium",
-     "title": "VPN authentication / MFA failure (Cisco Anyconnect)",
-     "description": "My VPN isn't connecting this morning. AnyConnect keeps timing out on login right after I enter the 2FA code. Windows 11 laptop, working from home.",
+     "title": "VPN authentication / MFA failure (GlobalProtect)",
+     "description": "My VPN isn't connecting this morning. GlobalProtect keeps timing out on login right after I enter the 2FA code. Windows 11 laptop, working from home.",
      "resolution": {"level": "human_verified", "source": "it_support",
-       "summary": "Stale AnyConnect authentication session. Quit the VPN client, refresh the SSO session in the browser, restart the VPN client service and flush DNS, then reconnect and approve MFA within 60 seconds.",
+       "summary": "Stale GlobalProtect authentication session. Quit the VPN client, refresh the SSO session in the browser, restart the VPN client service and flush DNS, then reconnect and approve MFA within 60 seconds.",
        "root_cause": "Stale authentication token cached by the VPN client after an SSO session expiry.",
        "steps": ["Quit the VPN client completely from the system tray", "Sign out of the company SSO portal in your browser and sign back in", "Check that your device clock is set automatically", "Restart the VPN client and connect to the default gateway", "Approve the MFA prompt within 60 seconds"],
        "automated_actions": ["restart_vpn_client_service", "flush_dns_cache"]}},

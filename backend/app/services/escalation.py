@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.serializers import iso
 from app.core.logging import get_logger
 from app.models.agent import AgentAction, AgentRun
 from app.models.department import Department
@@ -59,7 +60,7 @@ async def build_package(db: AsyncSession, ticket: Ticket, run: Optional[AgentRun
         ],
         "retrieved_solutions": ctx.get("retrieval", [])[:5],
         "agent_reasoning_summary": (run.reasoning_summary if run and run.reasoning_summary else reason),
-        "timeline": [{"step": s.title, "status": s.status, "at": s.created_at.isoformat() if s.created_at else None}
+        "timeline": [{"step": s.title, "status": s.status, "at": iso(s.created_at)}
                      for s in steps][-12:],
         "user_information": {
             "name": ticket.creator.full_name if ticket.creator else None,

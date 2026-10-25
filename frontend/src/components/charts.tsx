@@ -1,46 +1,48 @@
 /**
- * Chart primitives (dataviz method): validated categorical slots (#2a78d6 / #eb6834 pass CVD + contrast
- * on white), 2px lines, <=24px bars with 4px rounded data-ends, solid hairline grid, legend only for >=2
- * series, hover tooltips, and a table view for every chart so no value is color- or hover-gated.
+ * Chart primitives. Categorical slots #1e5aa8 / #c05f12 pass the CVD, normal-vision and contrast checks on the
+ * white surface (dataviz validator). 2px lines, bars with 4px data-ends, recessive grid, a legend whenever there
+ * are two series, hover tooltips, and a table view on every chart so no value depends on colour or hover alone.
+ * Status colours (met / breached) are reserved for status and always carry a text label.
  */
 import { useState, type ReactNode } from "react";
-import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Table2, BarChart3 } from "lucide-react";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
+import { BarChart3, Table2 } from "lucide-react";
+import { day } from "../lib/format";
 
-export const SERIES = ["#2a78d6", "#eb6834"];
-const GRID = "#e2e8f0";
-const AXIS = "#64748b";
+export const SERIES = ["#1e5aa8", "#c05f12"];
+const GRID = "#e2e5ea";
+const AXIS = "#5b6474";
 
-export function ChartCard({ title, subtitle, children, table, legend }:
-  { title: string; subtitle?: string; children: ReactNode; table: { columns: string[]; rows: (string | number)[][] }; legend?: { label: string; color: string }[] }) {
+export function ChartCard({ title, description, children, table, legend }:
+  { title: string; description?: string; children: ReactNode; table: { columns: string[]; rows: (string | number)[][] }; legend?: { label: string; color: string }[] }) {
   const [asTable, setAsTable] = useState(false);
   return (
-    <section className="card">
+    <section className="card" aria-label={title}>
       <div className="card-header">
         <div className="min-w-0">
-          <p className="label-caps !text-ink">{title}</p>
-          {subtitle && <p className="text-xs text-meta mt-0.5">{subtitle}</p>}
+          <h2 className="card-title">{title}</h2>
+          {description && <p className="text-xs text-meta">{description}</p>}
         </div>
         <button className="btn-ghost btn-sm" onClick={() => setAsTable((t) => !t)} aria-pressed={asTable}>
-          {asTable ? <BarChart3 className="size-3.5" /> : <Table2 className="size-3.5" />} {asTable ? "Chart" : "Table"}
+          {asTable ? <BarChart3 className="size-4" aria-hidden /> : <Table2 className="size-4" aria-hidden />} {asTable ? "Chart" : "Table"}
         </button>
       </div>
       <div className="p-4">
         {legend && legend.length > 1 && !asTable && (
-          <div className="flex flex-wrap gap-4 mb-3">
+          <ul className="mb-2 flex flex-wrap gap-4" aria-label="Legend">
             {legend.map((l) => (
-              <span key={l.label} className="flex items-center gap-1.5 text-xs text-body">
-                <span className="inline-block h-0.5 w-4 rounded" style={{ background: l.color }} />{l.label}
-              </span>
+              <li key={l.label} className="flex items-center gap-2 text-xs text-body">
+                <span className="inline-block h-1 w-4 rounded-sm" style={{ background: l.color }} aria-hidden />{l.label}
+              </li>
             ))}
-          </div>
+          </ul>
         )}
         {asTable ? (
-          <div className="max-h-72 overflow-auto scroll-thin">
+          <div className="max-h-72 overflow-auto scroll-thin" tabIndex={0} role="region" aria-label={`${title} data`}>
             <table className="w-full text-sm">
-              <thead><tr>{table.columns.map((c) => <th key={c} className="label-caps text-left py-1.5 pr-3 border-b border-line">{c}</th>)}</tr></thead>
+              <thead><tr>{table.columns.map((c, j) => <th key={c} className={`th border-b border-line px-0 pr-4 ${j ? "text-right" : ""}`}>{c}</th>)}</tr></thead>
               <tbody>{table.rows.map((r, i) => (
-                <tr key={i} className="border-b border-muted">{r.map((v, j) => <td key={j} className={`py-1.5 pr-3 ${j ? "tabular-nums" : ""}`}>{v}</td>)}</tr>
+                <tr key={i} className="border-b border-line">{r.map((v, j) => <td key={j} className={`py-1 pr-4 ${j ? "text-right tabular-nums" : ""}`}>{v}</td>)}</tr>
               ))}</tbody>
             </table>
           </div>
@@ -50,32 +52,32 @@ export function ChartCard({ title, subtitle, children, table, legend }:
   );
 }
 
-function TooltipBox({ active, payload, label, fmt }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string; fmt?: (l: string) => string }) {
+function TooltipBox({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-line bg-surface px-3 py-2 shadow-pop text-xs">
-      <p className="font-medium text-ink mb-1">{fmt ? fmt(String(label)) : label}</p>
+    <div className="card px-3 py-2 text-xs shadow-pop">
+      <p className="mb-1 font-medium text-ink">{label ? day(String(label)) : ""}</p>
       {payload.map((p) => (
         <p key={p.name} className="flex items-center gap-2 text-body">
-          <span className="inline-block h-0.5 w-3 rounded" style={{ background: p.color }} />{p.name}
-          <span className="ml-auto pl-3 font-semibold text-ink tabular-nums">{p.value}</span>
+          <span className="inline-block h-1 w-3 rounded-sm" style={{ background: p.color }} aria-hidden />{p.name}
+          <span className="ml-auto pl-4 font-medium text-ink tabular-nums">{p.value}</span>
         </p>
       ))}
     </div>
   );
 }
 
-const dayLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" });
+const axisProps = { tick: { fill: AXIS, fontSize: 12 }, tickLine: false } as const;
 
 export function TrendLines({ data, series }: { data: Record<string, string | number>[]; series: { key: string; label: string }[] }) {
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
           <CartesianGrid stroke={GRID} vertical={false} />
-          <XAxis dataKey="date" tickFormatter={dayLabel} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={24} />
-          <YAxis allowDecimals={false} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-          <Tooltip content={<TooltipBox fmt={dayLabel} />} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }} />
+          <XAxis dataKey="date" tickFormatter={day} {...axisProps} axisLine={{ stroke: GRID }} minTickGap={32} />
+          <YAxis allowDecimals={false} {...axisProps} axisLine={false} width={40} />
+          <Tooltip content={<TooltipBox />} cursor={{ stroke: "#cdd2da", strokeWidth: 1 }} />
           {series.map((s, i) => (
             <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={SERIES[i]} strokeWidth={2}
               dot={false} activeDot={{ r: 4, stroke: "#ffffff", strokeWidth: 2 }} strokeLinecap="round" strokeLinejoin="round" />
@@ -90,12 +92,12 @@ export function GrowthArea({ data, dataKey, label }: { data: Record<string, stri
   return (
     <div className="h-56">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
           <CartesianGrid stroke={GRID} vertical={false} />
-          <XAxis dataKey="date" tickFormatter={dayLabel} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={24} />
-          <YAxis allowDecimals={false} tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={40} />
-          <Tooltip content={<TooltipBox fmt={dayLabel} />} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }} />
-          <Area type="monotone" dataKey={dataKey} name={label} stroke={SERIES[0]} strokeWidth={2} fill={SERIES[0]} fillOpacity={0.1}
+          <XAxis dataKey="date" tickFormatter={day} {...axisProps} axisLine={{ stroke: GRID }} minTickGap={32} />
+          <YAxis allowDecimals={false} {...axisProps} axisLine={false} width={40} />
+          <Tooltip content={<TooltipBox />} cursor={{ stroke: "#cdd2da", strokeWidth: 1 }} />
+          <Area type="monotone" dataKey={dataKey} name={label} stroke={SERIES[0]} strokeWidth={2} fill={SERIES[0]} fillOpacity={0.08}
             activeDot={{ r: 4, stroke: "#ffffff", strokeWidth: 2 }} />
         </AreaChart>
       </ResponsiveContainer>
@@ -103,20 +105,20 @@ export function GrowthArea({ data, dataKey, label }: { data: Record<string, stri
   );
 }
 
-/** Horizontal single-series bars (one color for every bar; nominal categories are never value-ramped). */
+/** Horizontal single-series bars (one colour for every bar; nominal categories are never value-ramped). */
 export function BarList({ items, total, suffix }: { items: { name: string; count: number; label?: string }[]; total?: number; suffix?: string }) {
   const max = Math.max(1, ...items.map((i) => i.count));
-  if (!items.length) return <p className="text-sm text-meta py-6 text-center">No data in this window.</p>;
+  if (!items.length) return <p className="py-8 text-center text-sm text-meta">No data for this period.</p>;
   return (
-    <ul className="space-y-2.5">
+    <ul className="space-y-2">
       {items.map((i) => (
-        <li key={i.name} className="group" title={`${i.label || i.name}: ${i.count}${total ? ` (${Math.round((i.count / total) * 100)}%)` : ""}`}>
-          <div className="flex justify-between gap-2 text-[0.8125rem] mb-1">
-            <span className="text-body truncate">{i.label || i.name}</span>
-            <span className="font-semibold text-ink tabular-nums">{i.count}{suffix}{total ? <span className="text-meta font-normal"> · {Math.round((i.count / total) * 100)}%</span> : null}</span>
+        <li key={i.name} title={`${i.label || i.name}: ${i.count}${total ? ` (${Math.round((i.count / total) * 100)}%)` : ""}`}>
+          <div className="mb-1 flex justify-between gap-2 text-sm">
+            <span className="truncate text-body">{i.label || i.name}</span>
+            <span className="font-medium text-ink tabular-nums">{i.count}{suffix}{total ? <span className="font-normal text-meta"> · {Math.round((i.count / total) * 100)}%</span> : null}</span>
           </div>
-          <div className="h-3 w-full">
-            <div className="h-full rounded-r-[4px] transition-opacity group-hover:opacity-80" style={{ width: `${(i.count / max) * 100}%`, background: SERIES[0], minWidth: 4 }} />
+          <div className="h-2 w-full">
+            <div className="h-full rounded-r-sm" style={{ width: `${(i.count / max) * 100}%`, background: SERIES[0], minWidth: 4 }} />
           </div>
         </li>
       ))}
@@ -124,12 +126,31 @@ export function BarList({ items, total, suffix }: { items: { name: string; count
   );
 }
 
-/** Meter: share of a whole, fill on a lighter step of the same ramp. */
+/** Met / breached split for one SLA row: status colours with a text label, 2px gap between the segments. */
+export function SplitBar({ met, breached, label }: { met: number; breached: number; label: string }) {
+  const total = met + breached;
+  const pct = total ? (met / total) * 100 : 0;
+  return (
+    <div>
+      <div className="mb-1 flex justify-between gap-2 text-sm">
+        <span className="text-body">{label}</span>
+        <span className="font-medium text-ink tabular-nums">{total ? `${Math.round(pct)}%` : "-"}<span className="font-normal text-meta"> · {met} met, {breached} breached</span></span>
+      </div>
+      <div className="flex h-2 w-full gap-0.5" aria-hidden>
+        {met > 0 && <div className="h-full rounded-l-sm bg-ok-dot" style={{ width: `${pct}%` }} />}
+        {breached > 0 && <div className="h-full rounded-r-sm bg-crit" style={{ width: `${100 - pct}%` }} />}
+        {!total && <div className="h-full w-full rounded-sm bg-muted" />}
+      </div>
+    </div>
+  );
+}
+
+/** Share of a whole on a lighter step of the same ramp. */
 export function Meter({ value, label }: { value: number; label: string }) {
   return (
     <div>
-      <div className="flex justify-between text-[0.8125rem] mb-1"><span className="text-body">{label}</span><span className="font-semibold text-ink">{value}%</span></div>
-      <div className="h-2 rounded-sm bg-[#cde2fb] overflow-hidden"><div className="h-full rounded-r-[4px]" style={{ width: `${Math.min(100, value)}%`, background: SERIES[0] }} /></div>
+      <div className="mb-1 flex justify-between text-sm"><span className="text-body">{label}</span><span className="font-medium text-ink tabular-nums">{value}%</span></div>
+      <div className="h-2 overflow-hidden rounded-sm bg-brand-soft"><div className="h-full rounded-r-sm" style={{ width: `${Math.min(100, value)}%`, background: SERIES[0] }} /></div>
     </div>
   );
 }
