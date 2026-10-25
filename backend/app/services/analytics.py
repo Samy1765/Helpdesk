@@ -15,7 +15,7 @@ from app.database import utcnow
 from app.models.agent import AgentAction, AgentRun, Incident, LLMUsageLog
 from app.models.knowledge import KnowledgeDocument
 from app.models.ticket import (
-    SolutionConfidence, Ticket, TicketCategory, TicketEscalation, TicketSolution, TicketStatus,
+    SolutionConfidence, Ticket, TicketCategory, TicketEscalation, TicketFeedback, TicketSolution, TicketStatus,
 )
 from app.services.classification import INTENT_LABELS
 
@@ -70,7 +70,12 @@ async def support_overview(db: AsyncSession) -> dict:
     frequent = await _distribution(db, Ticket.intent, Ticket.created_at >= week_ago, Ticket.intent.is_not(None), limit=6)
     for f in frequent:
         f["label"] = INTENT_LABELS.get(f["name"], f["name"])
+    now, targets = utcnow(), settings.sla_minutes
+    sla_breached_open = sum(1 for prio, created_at in (await db.execute(select(Ticket.priority, Ticket.created_at).where(
+        open_statuses, Ticket.incident_id.is_(None)))).all()
+        if (now - _aware(created_at)).total_seconds() / 60 > targets.get(prio or "medium", 480))
     return {
+        "sla_breached_open": sla_breached_open,
         "new_tickets": await _count(db, Ticket.status.in_((TicketStatus.NEW, TicketStatus.AI_ANALYSIS))),
         "open_tickets": await _count(db, open_statuses),
         "awaiting_user": await _count(db, Ticket.status == TicketStatus.AWAITING_USER),
@@ -180,6 +185,28 @@ async def admin_analytics(db: AsyncSession, days: int = 30) -> dict:
     for t in top_intents:
         t["label"] = INTENT_LABELS.get(t["name"], t["name"])
 
+    # ---- SLA outcomes: tickets resolved in the window against the target for their priority ----
+    targets = settings.sla_minutes
+    sla_rows = (await db.execute(select(Ticket.priority, Ticket.created_at, Ticket.resolved_at).where(
+        Ticket.resolved_at >= since, Ticket.status.in_((TicketStatus.RESOLVED, TicketStatus.CLOSED))))).all()
+    sla_by: dict[str, list[int]] = {p: [0, 0] for p in ("critical", "high", "medium", "low")}
+    for prio, created_at, resolved_at in sla_rows:
+        minutes = (_aware(resolved_at) - _aware(created_at)).total_seconds() / 60
+        sla_by.setdefault(prio or "medium", [0, 0])[0 if minutes <= targets.get(prio or "medium", 480) else 1] += 1
+    sla_met = sum(v[0] for v in sla_by.values())
+    open_breached = sum(1 for prio, created_at in (await db.execute(select(Ticket.priority, Ticket.created_at).where(
+        Ticket.status.in_(TicketStatus.OPEN), Ticket.incident_id.is_(None)))).all()
+        if (now - _aware(created_at)).total_seconds() / 60 > targets.get(prio or "medium", 480))
+
+    # ---- employee feedback ----
+    fb = (await db.execute(select(TicketFeedback.issue_resolved, TicketFeedback.satisfaction_rating)
+                           .where(TicketFeedback.created_at >= since))).all()
+    ratings = [r for _, r in fb if r]
+
+    # ---- approvals for restricted / dangerous actions ----
+    approvals = Counter(r[0] for r in (await db.execute(select(AgentAction.status).where(
+        AgentAction.approval_required.is_(True), AgentAction.created_at >= since))).all())
+
     return {
         "window_days": days,
         "overview": {
@@ -204,6 +231,20 @@ async def admin_analytics(db: AsyncSession, days: int = 30) -> dict:
         "routing_levels": [{"name": k, "count": v} for k, v in sorted(routing.items())],
         "knowledge_growth": kb_growth,
         "knowledge_by_level": [{"name": lvl, "count": by_level.get(lvl, 0)} for lvl in SolutionConfidence.ORDER],
+        "sla": {
+            "compliance": _pct(sla_met, len(sla_rows)), "met": sla_met, "breached": len(sla_rows) - sla_met,
+            "open_breached": open_breached, "targets_minutes": targets,
+            "by_priority": [{"name": p, "met": v[0], "breached": v[1], "compliance": _pct(v[0], v[0] + v[1])}
+                            for p, v in sla_by.items()],
+        },
+        "satisfaction": {
+            "responses": len(fb), "rated": len(ratings),
+            "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
+            "distribution": [{"name": str(score), "count": ratings.count(score)} for score in range(5, 0, -1)],
+            "fix_confirmed_rate": _pct(sum(1 for ok, _ in fb if ok), len(fb)),
+        },
+        "approvals": {"approved": approvals.get("approved", 0), "rejected": approvals.get("rejected", 0),
+                      "pending": approvals.get("pending_approval", 0)},
         "llm_usage": {
             "calls": int(usage[0]), "successful_calls": int(usage[1]),
             "prompt_tokens": int(usage[2]), "completion_tokens": int(usage[3]),

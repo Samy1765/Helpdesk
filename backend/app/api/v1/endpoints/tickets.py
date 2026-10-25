@@ -20,7 +20,8 @@ from app.models.agent import AgentAction, Incident
 from app.models.attachment import Attachment
 from app.models.conversation import Conversation
 from app.models.ticket import (
-    Ticket, TicketCategory, TicketEscalation, TicketEvent, TicketMessage, TicketStatus, TroubleshootingStep,
+    Ticket, TicketCategory, TicketEscalation, TicketEvent, TicketFeedback, TicketMessage, TicketStatus,
+    TroubleshootingStep,
 )
 from app.models.user import User
 from app.rag.retriever import similar_tickets
@@ -41,6 +42,11 @@ class TicketIn(BaseModel):
 class FeedbackIn(BaseModel):
     resolved: bool
     comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class RatingIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=1000)
 
 
 class CommentIn(BaseModel):
@@ -155,6 +161,9 @@ async def ticket_detail(ticket_id: int, db: AsyncSession = Depends(get_db), user
                                     exclude_ticket_id=ticket.id, min_similarity=0.5, k=8)
     if not staff:
         similar = [h for h in similar if h.ticket.status in TicketStatus.DONE or h.ticket.user_id == user.id]
+    rating = (await db.execute(select(TicketFeedback.satisfaction_rating).where(
+        TicketFeedback.ticket_id == ticket.id, TicketFeedback.user_id == ticket.user_id,
+        TicketFeedback.satisfaction_rating.is_not(None)).order_by(TicketFeedback.id.desc()).limit(1))).scalar()
 
     return {
         "ticket": ticket_out(ticket),
@@ -183,6 +192,7 @@ async def ticket_detail(ticket_id: int, db: AsyncSession = Depends(get_db), user
                      "status": h.ticket.status, "similarity": round(h.similarity, 3)} for h in similar[:5]],
         "attachments": [{"token": a.token, "filename": a.filename, "content_type": a.content_type,
                          "size": a.size_bytes} for a in attachments],
+        "rating": rating,
         "can_manage": staff,
     }
 
@@ -212,6 +222,26 @@ async def feedback(ticket_id: int, data: FeedbackIn, db: AsyncSession = Depends(
     await db.refresh(ticket)
     return {"ticket": ticket_out(ticket), "agent": {"state": outcome.state, "message": outcome.message,
                                                     "payload": outcome.payload}}
+
+
+@router.post("/{ticket_id}/rating")
+async def rate(ticket_id: int, data: RatingIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The requester rates how a closed ticket was handled (1-5). Rating again replaces the earlier score."""
+    ticket = await load_ticket(db, ticket_id, user)
+    if ticket.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the requester can rate a ticket")
+    if ticket.status not in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+        raise HTTPException(status.HTTP_409_CONFLICT, "You can rate a ticket once it is resolved")
+    fb = (await db.execute(select(TicketFeedback).where(
+        TicketFeedback.ticket_id == ticket.id, TicketFeedback.user_id == user.id,
+        TicketFeedback.satisfaction_rating.is_not(None)).order_by(TicketFeedback.id.desc()).limit(1))).scalar_one_or_none()
+    if fb is None:
+        fb = TicketFeedback(ticket_id=ticket.id, user_id=user.id, issue_resolved=ticket.status == TicketStatus.RESOLVED)
+        db.add(fb)
+    fb.satisfaction_rating, fb.comments = data.rating, data.comment
+    await ticket_svc.add_event(db, ticket, "rated", user_id=user.id, new_value=str(data.rating),
+                               description=f"Employee rated the resolution {data.rating}/5")
+    return {"rating": data.rating, "comment": data.comment}
 
 
 @router.post("/{ticket_id}/comments", status_code=status.HTTP_201_CREATED)

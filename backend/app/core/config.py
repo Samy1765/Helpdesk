@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     MAX_REQUEST_KB: int = 1024                   # JSON bodies; uploads are capped by MAX_UPLOAD_MB
     # Swagger / ReDoc / OpenAPI schema; blank = enabled everywhere except production
     API_DOCS_ENABLED: Optional[bool] = None
+    # Seed the fictional demo company (python -m app.database.seed; the Docker entrypoint reads it too)
+    SEED_DEMO_DATA: bool = False
 
     # Database. PostgreSQL is the primary target; SQLite is supported for local dev/tests.
     DATABASE_URL: str = "postgresql+asyncpg://precision_user:precision_pass@localhost:5432/precision_ai"

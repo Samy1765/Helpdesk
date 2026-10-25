@@ -1,8 +1,9 @@
 """
 Precision AI - Seed data (synthetic; no real personal information).
 
-  python -m app.database.seed               # reference data + KB + history + live simulation
+  python -m app.database.seed               # reference data + KB + history (+ demo company) + live simulation
   python -m app.database.seed --no-simulate # skip replaying live reports through the agent
+  python -m app.database.seed --demo        # force the demo company on (default: SEED_DEMO_DATA)
 
 Idempotent: reference data is upserted by natural key; tickets are only seeded into an empty DB.
 The "live" reports are replayed through the real chat/agent pipeline, so the agent runs, incidents,
@@ -21,6 +22,7 @@ from app.core.config import PROJECT_DIR, get_settings
 from app.core.logging import setup_logging
 from app.core.security import hash_password
 from app.database import async_session_factory, utcnow
+from app.database.demo import demo_accounts, seed_demo_company
 from app.models import (
     Department, KnowledgeDocument, Role, SolutionConfidence, Ticket, TicketCategory, TicketEscalation, TicketSolution,
     TicketStatus, User,
@@ -280,7 +282,7 @@ async def simulate_live_reports() -> list[str]:
     return log
 
 
-async def main(simulate: bool) -> None:
+async def main(simulate: bool, demo: bool) -> None:
     setup_logging()
     settings = get_settings()
     async with async_session_factory() as db:
@@ -289,10 +291,15 @@ async def main(simulate: bool) -> None:
         docs = await seed_knowledge(db, ref["categories"], ref["users"]["admin"])
         sols = await seed_verified_solutions(db, ref)
         hist = await seed_history(db, ref)
+        company = await seed_demo_company(db, ref) if demo else None
         await db.commit()
         report = await get_index_manager().rebuild_all(db)
     print(f"Reference data ready. Knowledge docs added: {docs}. Verified solutions added: {sols}. "
           f"Historical tickets added: {hist}.")
+    if company is not None:
+        print("Demo company (Acme Demo Industries): " + (
+            "already present, nothing added" if company.get("skipped") else
+            ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in sorted(company.items()))))
     print(f"FAISS indexes rebuilt from the database: {report}")
 
     if simulate and hist:
@@ -301,14 +308,22 @@ async def main(simulate: bool) -> None:
         for line in await simulate_live_reports():
             print(line)
 
-    print("\nDemo accounts (change these passwords outside local development):")
-    print("  admin      / Admin@123     (administrator)")
-    print("  itsupport  / Support@123   (IT support - Network Team; other teams: iam.agent, mail.agent, ...)")
-    print("  johndoe    / Employee@123  (employee; also arivera, schen, ewhite, ...)")
+    async with async_session_factory() as db:
+        users = list((await db.execute(select(User))).unique().scalars().all())
+        total = (await db.execute(select(func.count(Ticket.id)))).scalar()
+    print(f"\nTickets in the database: {total}")
+    print("Demo accounts (local demo only; change these passwords anywhere else):")
+    for line in demo_accounts(users):
+        print(line)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--no-simulate", action="store_true")
+    parser.add_argument("--no-simulate", action="store_true", help="skip replaying live reports through the agent")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--demo", dest="demo", action="store_true", default=None,
+                       help="add the fictional demo company (default: SEED_DEMO_DATA)")
+    group.add_argument("--no-demo", dest="demo", action="store_false")
     args = parser.parse_args()
-    asyncio.run(main(simulate=not args.no_simulate))
+    asyncio.run(main(simulate=not args.no_simulate,
+                     demo=get_settings().SEED_DEMO_DATA if args.demo is None else args.demo))
