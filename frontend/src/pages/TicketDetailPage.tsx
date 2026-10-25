@@ -310,7 +310,7 @@ export default function TicketDetailPage() {
           </Panel>
 
           <details className="card">
-            <summary className="card-header cursor-pointer list-none"><span className="text-sm font-semibold">History</span><span className="text-xs text-meta">{d.events.length} entries</span></summary>
+            <summary className="card-header cursor-pointer list-none"><span className="text-sm font-semibold">History</span><span className="text-xs text-meta">{d.events.length === 1 ? "1 entry" : `${d.events.length} entries`}</span></summary>
             <ul className="divide-y divide-muted">
               {d.events.map((e) => (
                 <li key={e.id} className="px-4 py-2 text-sm flex justify-between gap-3">
@@ -327,7 +327,7 @@ export default function TicketDetailPage() {
             <dl className="-my-1.5">
               <Row label="Reported by">{t.creator?.name}{t.creator?.department ? <span className="block text-xs text-meta">{t.creator.department}{t.creator.job_title ? `, ${t.creator.job_title}` : ""}</span> : null}</Row>
               <Row label="Category">{t.category || "General"}{(t.sub_category || t.intent) && <span className="block text-xs text-meta">{t.sub_category || sentenceCase(t.intent)}</span>}</Row>
-              <Row label="Team">{t.department || "Not assigned yet"}</Row>
+              <Row label="Team">{t.department || (t.resolved_by_ai ? "Not needed" : "Not assigned yet")}</Row>
               <Row label="Assignee">{t.assignee?.name || (t.resolved_by_ai ? "Resolved by the assistant" : "Nobody yet")}</Row>
               <Row label="Opened">{dateTime(t.created_at)}</Row>
               {t.resolved_at && <Row label="Resolved">{dateTime(t.resolved_at)}</Row>}

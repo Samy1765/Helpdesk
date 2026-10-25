@@ -119,7 +119,7 @@ export default function Layout() {
             <Avatar name={user.full_name} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{user.full_name}</p>
-              <p className="text-xs text-meta">{user.role === "it_support" ? "IT support" : sentenceCase(user.role)}</p>
+              <p className="text-xs text-meta">{user.role === "it_support" ? "IT support" : user.role === "admin" ? "Administrator" : sentenceCase(user.role)}</p>
             </div>
             <button className="btn-ghost !p-2" onClick={doLogout} aria-label="Log out"><LogOut className="size-4" /></button>
           </div>

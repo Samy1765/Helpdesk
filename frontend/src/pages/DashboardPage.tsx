@@ -81,7 +81,7 @@ export default function DashboardPage() {
   const firstName = (user?.full_name || data.user.name).split(" ")[0];
   const s = data.support as Record<string, number> | undefined;
   const mine = data.my_tickets;
-  const role = user?.role === "it_support" ? "IT support" : sentenceCase(user?.role);
+  const role = user?.role === "it_support" ? "IT support" : user?.role === "admin" ? "Administrator" : sentenceCase(user?.role);
 
   return (
     <div className="space-y-6">
@@ -132,9 +132,9 @@ export default function DashboardPage() {
 
       <section>
         <SectionTitle right={<Link to="/knowledge-base" className="text-sm text-cobalt hover:underline">Knowledge base</Link>}>Fix it yourself</SectionTitle>
-        <ul className="card grid sm:grid-cols-2 divide-y divide-muted sm:divide-y-0">
+        <ul className="card grid grid-cols-1 sm:grid-cols-2 divide-y divide-muted sm:divide-y-0">
           {data.guides.map((g) => (
-            <li key={g.id} className="sm:border-b sm:border-muted">
+            <li key={g.id} className="min-w-0 sm:border-b sm:border-muted">
               <Link to={`/knowledge-base?doc=${g.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-canvas">
                 <BookOpen className="size-4 text-meta shrink-0" />
                 <span className="min-w-0 flex-1">

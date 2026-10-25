@@ -19,7 +19,7 @@ const trustLabel = (level: string) => sentenceCase(confidenceText(level));
 function DocViewer({ id, onClose }: { id: number; onClose: () => void }) {
   const { data, loading } = useApi<KnowledgeDoc>(`/knowledge/documents/${id}`);
   return (
-    <div className="card">
+    <div className="card min-w-0">
       <div className="card-header">
         <span className="font-semibold truncate">{data?.title || "Loading"}</span>
         <button className="btn-ghost !p-1.5" onClick={onClose} aria-label="Close"><X className="size-4" /></button>
@@ -144,8 +144,8 @@ export default function KnowledgePage() {
         </section>
       )}
 
-      <div className={`grid gap-4 items-start ${docId ? "lg:grid-cols-[20rem_1fr]" : ""}`}>
-        <section>
+      <div className={`grid grid-cols-1 gap-4 items-start ${docId ? "lg:grid-cols-[20rem_1fr]" : ""}`}>
+        <section className="min-w-0">
           <SectionTitle right={
             <select className="rounded border border-line bg-surface px-2 py-1 text-sm" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
               <option value="">All categories</option>{categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

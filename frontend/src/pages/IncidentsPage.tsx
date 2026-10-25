@@ -17,6 +17,18 @@ interface IncidentDetail {
   can_manage: boolean;
 }
 
+/** Merge entries that say the same thing in the same minute (e.g. one fix closing twelve tickets). */
+function groupTimeline(events: IncidentDetail["timeline"]) {
+  const groups: { at: string; text: string; tickets: number[] }[] = [];
+  for (const e of events) {
+    const text = e.description || sentenceCase(e.type);
+    const last = groups[groups.length - 1];
+    if (last && last.text === text && clock(last.at) === clock(e.at)) last.tickets.push(e.ticket_id);
+    else groups.push({ at: e.at, text, tickets: [e.ticket_id] });
+  }
+  return groups;
+}
+
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -83,11 +95,13 @@ function Detail({ id, onChanged }: { id: number; onChanged: () => void }) {
         <section className="card">
           <div className="card-header"><h3 className="text-sm font-semibold">Timeline</h3></div>
           <ol className="px-4 py-3 space-y-2.5">
-            {data.timeline.slice(0, 12).map((e, idx) => (
+            {groupTimeline(data.timeline).slice(0, 15).map((g, idx) => (
               <li key={idx} className="grid grid-cols-[3.5rem_7rem_1fr] gap-3 text-sm">
-                <span className="text-meta tabular-nums">{clock(e.at)}</span>
-                <span className="mono text-xs text-cobalt pt-0.5">{numbers.get(e.ticket_id) || ""}</span>
-                <span className="text-body">{e.description || sentenceCase(e.type)}</span>
+                <span className="text-meta tabular-nums">{clock(g.at)}</span>
+                <span className="mono text-xs text-cobalt pt-0.5">
+                  {g.tickets.length === 1 ? numbers.get(g.tickets[0]) : `${g.tickets.length} tickets`}
+                </span>
+                <span className="text-body">{g.text}</span>
               </li>
             ))}
           </ol>

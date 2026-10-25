@@ -66,7 +66,8 @@ function TooltipBox({ active, payload, label, fmt }: { active?: boolean; payload
   );
 }
 
-const dayLabel = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayLabel = (d: string) => { const x = new Date(d + "T00:00:00"); return `${x.getDate()} ${MONTHS[x.getMonth()]}`; };
 
 export function TrendLines({ data, series }: { data: Record<string, string | number>[]; series: { key: string; label: string }[] }) {
   return (
