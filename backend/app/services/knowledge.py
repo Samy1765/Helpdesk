@@ -8,6 +8,7 @@ Precision AI - Knowledge service
 """
 
 import re
+from datetime import date
 from typing import Optional
 
 from sqlalchemy import select
@@ -23,6 +24,14 @@ from app.vector_store import get_index_manager
 logger = get_logger(__name__)
 
 CHUNK_TARGET_CHARS = 900
+# Sections that describe a problem rather than fix it: searchable, but never presented as steps to follow
+REFERENCE_HEADING = re.compile(r"^(symptoms?|escalat|when to escalate|applies to|overview|background|related)", re.I)
+NUMBERED_STEP = re.compile(r"^\s*\d+[.)]\s+", re.M)
+
+
+def is_procedure(heading: Optional[str], content: str) -> bool:
+    """A chunk the agent may present as a fix: numbered steps under a non-reference heading."""
+    return not REFERENCE_HEADING.match(heading or "") and len(NUMBERED_STEP.findall(content)) >= 2
 
 
 def chunk_markdown(content: str) -> list[tuple[Optional[str], str]]:
@@ -68,9 +77,11 @@ def steps_from_text(text: str) -> list[str]:
 async def create_document(db: AsyncSession, *, title: str, content: str, category_id: Optional[int],
                           doc_type: str = "runbook", source: str = "it_documentation",
                           trust_level: str = SolutionConfidence.ADMIN_VERIFIED,
-                          created_by: Optional[int] = None, index: bool = True) -> KnowledgeDocument:
+                          created_by: Optional[int] = None, last_reviewed: Optional[date] = None,
+                          index: bool = True) -> KnowledgeDocument:
     doc = KnowledgeDocument(title=title, content=content, category_id=category_id, doc_type=doc_type,
-                            source=source, trust_level=trust_level, created_by=created_by)
+                            source=source, trust_level=trust_level, created_by=created_by,
+                            last_reviewed=last_reviewed or utcnow().date())
     db.add(doc)
     await db.flush()
     chunks = [KnowledgeChunk(document_id=doc.id, chunk_index=i, heading=h, content=c)
@@ -96,6 +107,7 @@ async def update_document(db: AsyncSession, doc: KnowledgeDocument, *, title: Op
     manager = get_index_manager()
     if content is not None and content != doc.content:
         doc.content = content
+        doc.last_reviewed = utcnow().date()  # editing the procedure is a review
         for c in list(doc.chunks):
             await db.delete(c)
         await db.flush()

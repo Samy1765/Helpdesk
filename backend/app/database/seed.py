@@ -13,7 +13,7 @@ import argparse
 import asyncio
 import json
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 
@@ -22,13 +22,16 @@ from app.core.logging import setup_logging
 from app.core.security import hash_password
 from app.database import async_session_factory, utcnow
 from app.models import (
-    Department, KnowledgeDocument, Role, Ticket, TicketCategory, TicketEscalation, TicketStatus, User,
+    Department, KnowledgeDocument, Role, SolutionConfidence, Ticket, TicketCategory, TicketEscalation, TicketSolution,
+    TicketStatus, User,
 )
 from app.services import knowledge, tickets as ticket_svc
 from app.services.classification import DEFAULT_KEYWORDS, INTENTS, detect_intent, extract_entities
 from app.vector_store import get_index_manager
 
 DATA = PROJECT_DIR / "data"
+# Fictional company used by every seeded account and address (reserved for demos; not a real organisation)
+DEMO_DOMAIN = "acme-demo.in"
 
 ROLES = {
     "employee": ("Employee - submits and tracks own tickets", {"tickets": "own"}),
@@ -120,7 +123,7 @@ async def seed_reference(db, demo_users: bool = True) -> dict:
         d = (await db.execute(select(Department).where(Department.code == code))).scalar_one_or_none()
         if d is None:
             d = Department(name=name, code=code, description=desc, is_support_team=support,
-                           escalation_email=f"{code.lower()}@example.com" if support else None)
+                           escalation_email=f"{code.lower().replace('_', '-')}@{DEMO_DOMAIN}" if support else None)
             db.add(d)
         depts[code] = d
     await db.flush()
@@ -133,7 +136,7 @@ async def seed_reference(db, demo_users: bool = True) -> dict:
     for username, full, role, dept, title, loc, pw in (USERS if demo_users else []):
         u = (await db.execute(select(User).where(User.username == username))).unique().scalar_one_or_none()
         if u is None:
-            u = User(username=username, email=f"{username}@example.com", full_name=full, role=roles[role],
+            u = User(username=username, email=f"{username}@{DEMO_DOMAIN}", full_name=full, role=roles[role],
                      department=depts[dept], job_title=title, location=loc, password_hash=hash_password(pw))
             db.add(u)
         users[username] = u
@@ -143,15 +146,43 @@ async def seed_reference(db, demo_users: bool = True) -> dict:
 
 
 async def seed_knowledge(db, cats: dict, admin: User | None) -> int:
-    if (await db.execute(select(func.count(KnowledgeDocument.id)))).scalar():
-        return 0
+    """IT runbooks from data/knowledge (upsert by title: re-running adds new articles, never duplicates)."""
+    existing = set((await db.execute(select(KnowledgeDocument.title))).scalars().all())
     n = 0
     for path in sorted((DATA / "knowledge").glob("*.md")):
         meta, body = parse_front_matter(path.read_text(encoding="utf-8"))
+        title = meta.get("title", path.stem)
+        if title in existing:
+            continue
         cat = cats.get(meta.get("category", ""))
-        await knowledge.create_document(db, title=meta.get("title", path.stem), content=body,
-                                        category_id=cat.id if cat else None, doc_type=meta.get("doc_type", "runbook"),
+        reviewed = date.fromisoformat(meta["last_reviewed"]) if meta.get("last_reviewed") else None
+        await knowledge.create_document(db, title=title, content=body, category_id=cat.id if cat else None,
+                                        doc_type=meta.get("doc_type", "runbook"), last_reviewed=reviewed,
                                         created_by=admin.id if admin else None, index=False)
+        n += 1
+    return n
+
+
+async def seed_verified_solutions(db, ref: dict) -> int:
+    """Human-verified fixes linked to the runbooks: reused by the agent with no LLM call (level L3)."""
+    spec = json.loads((DATA / "seed" / "verified_solutions.json").read_text(encoding="utf-8"))["solutions"]
+    existing = set((await db.execute(select(TicketSolution.title))).scalars().all())
+    users, cats, now = ref["users"], ref["categories"], utcnow()
+    n = 0
+    for row in spec:
+        if row["title"] in existing:
+            continue
+        engineer = users.get(row["verified_by"]) or users.get("admin")
+        sol = await knowledge.create_solution(
+            db, title=row["title"], problem=row["problem"], symptoms=row.get("symptoms"),
+            solution="Verified fix: " + ". ".join(row["steps"]) + ".", steps=row["steps"],
+            category_id=cats[row["category"]].id, intent=row.get("intent"), confidence_level=row["level"],
+            source="admin" if row["level"] == SolutionConfidence.ADMIN_VERIFIED else "it_support",
+            root_cause=row.get("root_cause"), automated_actions=row.get("automated_actions", []),
+            created_by=engineer.id if engineer else None, verified_by=engineer.id if engineer else None, index=False)
+        sol.created_at = sol.verified_at = now - timedelta(days=row.get("days_ago", 90))
+        sol.times_used, sol.times_successful = row.get("times_used", 1), row.get("times_successful", 1)
+        sol.times_failed = sol.times_used - sol.times_successful
         n += 1
     return n
 
@@ -256,10 +287,12 @@ async def main(simulate: bool) -> None:
         ref = await seed_reference(db)
         await db.commit()
         docs = await seed_knowledge(db, ref["categories"], ref["users"]["admin"])
+        sols = await seed_verified_solutions(db, ref)
         hist = await seed_history(db, ref)
         await db.commit()
         report = await get_index_manager().rebuild_all(db)
-    print(f"Reference data ready. Knowledge docs added: {docs}. Historical tickets added: {hist}.")
+    print(f"Reference data ready. Knowledge docs added: {docs}. Verified solutions added: {sols}. "
+          f"Historical tickets added: {hist}.")
     print(f"FAISS indexes rebuilt from the database: {report}")
 
     if simulate and hist:

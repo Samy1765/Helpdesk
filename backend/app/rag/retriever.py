@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.ticket import SolutionConfidence, Ticket, TicketSolution, TicketStatus
+from app.services.knowledge import is_procedure
 from app.vector_store import KNOWLEDGE, SOLUTIONS, TICKETS, get_index_manager
 
 settings = get_settings()
@@ -156,6 +157,17 @@ async def similar_tickets(db: AsyncSession, text: str, *, category_id: Optional[
               if hits[t.id] >= min_similarity and same_category_or_near_identical(t)]
     result.sort(key=lambda h: h.similarity, reverse=True)
     return result
+
+
+async def procedure_for(db: AsyncSession, hit: ChunkHit) -> Optional[ChunkHit]:
+    """The section to present as a fix for a KB hit. A match on a Symptoms or Escalation section stands for its
+    document: the document's first procedure section is returned with the same similarity (None if it has none)."""
+    if is_procedure(hit.chunk.heading, hit.chunk.content):
+        return hit
+    rows = (await db.execute(select(KnowledgeChunk).where(KnowledgeChunk.document_id == hit.chunk.document_id)
+                             .order_by(KnowledgeChunk.chunk_index))).unique().scalars().all()
+    proc = next((c for c in rows if is_procedure(c.heading, c.content)), None)
+    return ChunkHit(proc, hit.similarity) if proc is not None else None
 
 
 async def _ticket_numbers(db: AsyncSession, ids: list[int]) -> dict[int, str]:

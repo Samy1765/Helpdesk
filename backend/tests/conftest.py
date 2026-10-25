@@ -40,7 +40,7 @@ _counter = {"n": 0}
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def seeded_db():
-    from app.database.seed import seed_history, seed_knowledge, seed_reference
+    from app.database.seed import seed_history, seed_knowledge, seed_reference, seed_verified_solutions
 
     if os.environ.get("TEST_DATABASE_URL"):
         from app.database import Base, engine
@@ -53,6 +53,7 @@ async def seeded_db():
         ref = await seed_reference(db)
         await db.commit()
         await seed_knowledge(db, ref["categories"], ref["users"]["admin"])
+        await seed_verified_solutions(db, ref)
         await seed_history(db, ref)
         await db.commit()
         await get_index_manager().initialize(db)

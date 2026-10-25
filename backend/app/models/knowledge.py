@@ -3,10 +3,10 @@ Precision AI - Knowledge base models (documents + chunks for RAG).
 PostgreSQL is the source of truth; FAISS only indexes chunk ids.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.session import Base, utcnow
@@ -27,6 +27,8 @@ class KnowledgeDocument(Base):
     # Same trust ladder as solutions; official IT documentation is admin_verified
     trust_level: Mapped[str] = mapped_column(String(30), default="admin_verified")
     is_active: Mapped[bool] = mapped_column(default=True)
+    # Date the owning team last confirmed the procedure is correct (shown to readers; old dates prompt a review)
+    last_reviewed: Mapped[Optional[date]] = mapped_column(Date)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

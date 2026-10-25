@@ -11,6 +11,7 @@ The LLM is instructed to use ONLY the supplied context; its JSON is schema-valid
 citations must reference supplied sources, and every step passes the safety filter.
 """
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
@@ -81,7 +82,9 @@ def from_solution(hit: SolutionHit, routing_level: str) -> Candidate:
 def from_chunk(hit: ChunkHit) -> Candidate:
     """Deterministic fallback when no LLM is available: present the documented procedure verbatim."""
     steps, flags = filter_steps(steps_from_text(hit.chunk.content))
-    title = hit.chunk.document.title + (f" - {hit.chunk.heading}" if hit.chunk.heading else "")
+    # "Resolution" adds nothing to the document title; a named variant ("Resolution: no address") does
+    variant = re.sub(r"^resolution\b\s*[:\-]?\s*", "", hit.chunk.heading or "", flags=re.I)
+    title = hit.chunk.document.title + (f" - {variant}" if variant else "")
     return Candidate(
         kind="kb_procedure", label="VERIFIED SOLUTION", title=title,
         summary=f"Documented procedure from the IT knowledge base ({hit.ref}).", steps=steps,

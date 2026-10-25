@@ -2,6 +2,7 @@
 Precision AI - Response serializers shared by the API routers.
 """
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -97,12 +98,23 @@ def incident_out(i: Incident, ticket_count: Optional[int] = None) -> dict:
     }
 
 
+def _excerpt(content: str) -> str:
+    """First prose paragraph after the title (the article's one-line summary), not headings or list items."""
+    for para in re.split(r"\n\s*\n", content):
+        text = para.strip()
+        if text and not text.startswith(("#", "-", "*")) and not re.match(r"\d+[.)]\s", text):
+            return text[:220]
+    return content[:220].replace("#", "").strip()
+
+
 def document_out(d: KnowledgeDocument, include_content: bool = True) -> dict:
     out = {
         "id": d.id, "title": d.title, "doc_type": d.doc_type, "category": d.category.name if d.category else None,
         "category_id": d.category_id, "source": d.source, "trust_level": d.trust_level, "is_active": d.is_active,
+        "owner": d.category.department.name if d.category and d.category.department else "Service Desk",
+        "last_reviewed": d.last_reviewed.isoformat() if d.last_reviewed else None,
         "created_at": iso(d.created_at), "updated_at": iso(d.updated_at),
-        "excerpt": d.content[:220].replace("#", "").strip(),
+        "excerpt": _excerpt(d.content),
     }
     if include_content:
         out["content"] = d.content

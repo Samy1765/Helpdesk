@@ -34,7 +34,7 @@ from app.models.ticket import SolutionConfidence, Ticket, TicketFeedback, Ticket
 from app.models.user import User
 from app.rag import generator
 from app.rag.generator import Candidate
-from app.rag.retriever import Retrieval, retrieve
+from app.rag.retriever import Retrieval, procedure_for, retrieve
 from app.services import correlation, escalation, knowledge, tickets as ticket_svc
 from app.tools.executor import action_view, run_tool
 from app.tools.registry import RESTRICTED, diagnostics_for, get_tool
@@ -244,7 +244,8 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
     _move(run, S.PLAN)
     policy_reason = _policy_escalation(ticket)
     if policy_reason:
-        interim = generator.from_chunk(retrieval.chunks[0]) if retrieval.chunks else None
+        first = await procedure_for(db, retrieval.chunks[0]) if retrieval.chunks else None
+        interim = generator.from_chunk(first) if first else None
         _decide(run, f"Policy: {policy_reason}")
         run.routing_level = "L0_policy"
         return await _escalate(db, run, ticket, policy_reason, alerts, payload, interim=interim)
@@ -347,8 +348,9 @@ async def _next_candidate(db: AsyncSession, run: AgentRun, ticket: Ticket, retri
             if not llm_available:
                 _mark_llm_skipped(run)
             return generator.from_solution(hit, "L3_verified_retrieval")
-    for hit in retrieval.chunks:
-        if hit.ref not in tried_sources:
+    for match in retrieval.chunks:
+        hit = await procedure_for(db, match)  # a Symptoms / Escalation match stands for its document's procedure
+        if hit is not None and hit.ref not in tried_sources:
             _decide(run, f"Presenting documented procedure {hit.ref}")
             if not llm_available:
                 run.routing_level = "L3_verified_retrieval"
