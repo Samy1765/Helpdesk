@@ -181,13 +181,13 @@ The code lives on GitHub, so the other person does **not** need a copy of your f
 
 ```bash
 cd backend
-pytest -q                                                            # 241 tests on SQLite
+pytest -q                                                            # 242 tests on SQLite
 TEST_DATABASE_URL=postgresql+asyncpg://user:pass@host/db pytest -q   # same suite on PostgreSQL
 python -m app.scripts.evaluate                                       # held-out accuracy / duplicate precision-recall
 cd ../frontend && npm run typecheck && npm run lint:design && npm run build
 ```
 
-Latest run: **241/241 tests pass**. On the held-out set, the rules-only classifier reaches 87.5% category accuracy, priority is within one level 97.5% of the time, and duplicate detection scores 0.82 precision / 0.90 recall ([details and known misses](docs/EVALUATION.md)). These numbers did not change in this release: classification and priority rules were not modified, and a test checks that the evaluation set's text appears nowhere in the seed data, knowledge base or tests.
+Latest run: **242/242 tests pass**. On the held-out set, the rules-only classifier reaches 87.5% category accuracy, priority is within one level 97.5% of the time, and duplicate detection scores 0.82 precision / 0.90 recall ([details and known misses](docs/EVALUATION.md)). These numbers did not change in this release: classification and priority rules were not modified, and a test checks that the evaluation set's text appears nowhere in the seed data, knowledge base or tests.
 
 `npm run lint:design` keeps the interface on its design system (type scale, spacing, no gradients or emoji); `pip-audit` and `npm audit` report no known vulnerabilities.
 

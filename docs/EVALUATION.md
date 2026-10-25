@@ -44,7 +44,7 @@ With an LLM configured, reports whose rule confidence is below 0.6 are re-classi
 
 ## Test suite
 
-`pytest` — **241 tests**:
+`pytest` — **242 tests**:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -53,7 +53,7 @@ With an LLM configured, reports whose rule confidence is below 0.6 are re-classi
 | `test_agent_safety_llm.py` | 24 | state machine, tool permissions, safety filter, LLM router |
 | `test_vector_rag.py` | 8 | FAISS persistence and drift rebuild, retrieval gating, trust ladder |
 | `test_workflows.py` | 16 | end-to-end API: resolve, retry → escalate, duplicates, incidents, approvals, analytics, attachments |
-| `test_security.py` | 68 | lockout and rate limits, session rotation and revocation, startup checks, headers, CORS, body limits, uploads, a 403 check on every IT/admin route, audit trail, prompt-injection boundary, safety filter cases, `.env.example` completeness, secret scan |
+| `test_security.py` | 69 | lockout and rate limits, session rotation and revocation, startup checks, headers, CORS, body limits, uploads, a 403 check on every IT/admin route, audit trail, prompt-injection boundary, safety filter cases, `.env.example` completeness (every setting documented and every shipped value loads), secret scan |
 | `test_knowledge_base.py` | 83 | structure and review metadata of every runbook, every verified solution reusable without an LLM, procedure selection, FAISS rebuild, separation from the evaluation set |
 | `test_demo_seed.py` | 6 | demo company seed end to end (migrations, counts, chronology, idempotency), ratings, SLA / satisfaction analytics |
 

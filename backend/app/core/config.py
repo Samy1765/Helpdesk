@@ -149,6 +149,12 @@ class Settings(BaseSettings):
             return v
         return json.dumps(v)
 
+    @field_validator("API_DOCS_ENABLED", mode="before")
+    @classmethod
+    def blank_means_default(cls, v):
+        # `.env.example` ships `API_DOCS_ENABLED=`; docker compose passes that through as an empty string
+        return None if isinstance(v, str) and not v.strip() else v
+
     @property
     def cors_origins_list(self) -> list[str]:
         return json.loads(self.CORS_ORIGINS)

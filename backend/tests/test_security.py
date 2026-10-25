@@ -497,6 +497,16 @@ def test_env_example_documents_every_setting():
     assert not missing, f"undocumented settings in .env.example: {missing}"
 
 
+def test_env_example_values_load_as_settings(monkeypatch):
+    """Docker's env_file turns every line, blank ones included, into an environment variable."""
+    text = (PROJECT_DIR / ".env.example").read_text(encoding="utf-8")
+    for name, value in re.findall(r"^([A-Z][A-Z0-9_]+)=(.*)$", text, re.M):
+        if name in Settings.model_fields:
+            monkeypatch.setenv(name, value)
+    settings = Settings(_env_file=None)
+    assert settings.API_DOCS_ENABLED is None and settings.api_docs_enabled
+
+
 def test_no_secrets_in_tracked_files():
     try:
         files = subprocess.run(["git", "ls-files"], cwd=PROJECT_DIR, capture_output=True, text=True, check=True).stdout.split()
