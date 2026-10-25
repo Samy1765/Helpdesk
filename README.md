@@ -114,7 +114,7 @@ npm run build      # build once; the backend then serves the UI at http://localh
 
 | Role | Username | Password |
 |---|---|---|
-| Employee | `johndoe` (also `arivera`, `schen`, `ewhite`, …) | `Employee@123` |
+| Employee | `asharma` (also `rjain`, `schopra`, `ewagh`, …) | `Employee@123` |
 | IT support | `itsupport` (Network), `iam.agent`, `mail.agent`, `hw.agent`, `sec.agent`, `dba.agent`, `ops.agent`, `app.agent`, `print.agent`, `desk.agent` | `Support@123` |
 | Admin | `admin` | `Admin@123` |
 

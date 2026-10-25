@@ -6,9 +6,9 @@ import { ErrorNote, Field } from "../components/ui";
 import AuthShell from "./AuthShell";
 
 const DEMO = [
-  { label: "Employee", who: "John Doe, Engineering", username: "johndoe", password: "Employee@123" },
-  { label: "IT support agent", who: "Alex Kumar, Network Team", username: "itsupport", password: "Support@123" },
-  { label: "Administrator", who: "Morgan Admin, IT Operations", username: "admin", password: "Admin@123" },
+  { label: "Employee", who: "Amit Sharma, Engineering", username: "asharma", password: "Employee@123" },
+  { label: "IT support agent", who: "Rohit Kumar, Network Team", username: "itsupport", password: "Support@123" },
+  { label: "Administrator", who: "Vandana Iyer, IT Operations", username: "admin", password: "Admin@123" },
 ];
 
 export default function LoginPage() {

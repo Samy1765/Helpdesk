@@ -215,7 +215,7 @@ def test_protected_route_list_is_not_empty():
 
 @pytest.mark.parametrize("method,path", PROTECTED)
 async def test_employee_gets_403_on_staff_and_admin_routes(client, method, path):
-    emp = await login(client, "johndoe", "Employee@123")
+    emp = await login(client, "asharma", "Employee@123")
     r = await client.request(method, path, headers=emp, json={})
     assert r.status_code == 403, f"{method} {path} -> {r.status_code}"
 

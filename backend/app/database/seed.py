@@ -72,33 +72,33 @@ CATEGORY_DESCRIPTIONS = {
 
 # username, full name, role, department code, job title, location, password
 USERS = [
-    ("admin", "Morgan Admin", "admin", "SERVICE_DESK", "IT Operations Manager", "HQ", "Admin@123"),
-    ("itsupport", "Alex Kumar", "it_support", "NETWORK", "Network Engineer", "HQ", "Support@123"),
-    ("iam.agent", "Riley Stone", "it_support", "IAM", "Identity Engineer", "HQ", "Support@123"),
-    ("mail.agent", "Jordan Blake", "it_support", "EMAIL", "Messaging Engineer", "HQ", "Support@123"),
-    ("hw.agent", "Casey Lin", "it_support", "HARDWARE", "Hardware Technician", "HQ", "Support@123"),
-    ("sec.agent", "Taylor Reyes", "it_support", "SECURITY", "Security Analyst", "HQ", "Support@123"),
-    ("dba.agent", "Sam Okoro", "it_support", "DATABASE", "Database Administrator", "HQ", "Support@123"),
-    ("ops.agent", "Drew Park", "it_support", "SERVER_OPS", "Site Reliability Engineer", "HQ", "Support@123"),
-    ("app.agent", "Quinn Ellis", "it_support", "SOFTWARE", "Application Support Analyst", "HQ", "Support@123"),
-    ("print.agent", "Robin Hale", "it_support", "PRINT", "Print Services Technician", "HQ", "Support@123"),
-    ("desk.agent", "Jamie Fox", "it_support", "SERVICE_DESK", "Service Desk Analyst", "HQ", "Support@123"),
-    ("johndoe", "John Doe", "employee", "BU_ENGINEERING", "Software Engineer", "NYC Campus", "Employee@123"),
-    ("arivera", "Alex Rivera", "employee", "BU_DESIGN", "Staff Product Designer", "NYC Campus", "Employee@123"),
-    ("schen", "Sarah Chen", "employee", "BU_ENGINEERING", "Backend Engineer", "Core Infra", "Employee@123"),
-    ("dmiller", "David Miller", "employee", "BU_FINANCE", "Payroll Specialist", "Payroll Ops", "Employee@123"),
+    ("admin", "Vandana Iyer", "admin", "SERVICE_DESK", "IT Operations Manager", "Pune HQ", "Admin@123"),
+    ("itsupport", "Rohit Kumar", "it_support", "NETWORK", "Network Engineer", "Pune HQ", "Support@123"),
+    ("iam.agent", "Ishaan Bose", "it_support", "IAM", "Identity Engineer", "Pune HQ", "Support@123"),
+    ("mail.agent", "Jayesh Bhatt", "it_support", "EMAIL", "Messaging Engineer", "Pune HQ", "Support@123"),
+    ("hw.agent", "Chetan Limaye", "it_support", "HARDWARE", "Hardware Technician", "Pune HQ", "Support@123"),
+    ("sec.agent", "Tara Raghavan", "it_support", "SECURITY", "Security Analyst", "Pune HQ", "Support@123"),
+    ("dba.agent", "Suresh Oak", "it_support", "DATABASE", "Database Administrator", "Pune HQ", "Support@123"),
+    ("ops.agent", "Dhruv Parikh", "it_support", "SERVER_OPS", "Site Reliability Engineer", "Pune HQ", "Support@123"),
+    ("app.agent", "Komal Ekbote", "it_support", "SOFTWARE", "Application Support Analyst", "Pune HQ", "Support@123"),
+    ("print.agent", "Rakesh Hegde", "it_support", "PRINT", "Print Services Technician", "Pune HQ", "Support@123"),
+    ("desk.agent", "Jaya Phadke", "it_support", "SERVICE_DESK", "Service Desk Analyst", "Pune HQ", "Support@123"),
+    ("asharma", "Amit Sharma", "employee", "BU_ENGINEERING", "Software Engineer", "Pune HQ", "Employee@123"),
+    ("rjain", "Ritika Jain", "employee", "BU_DESIGN", "Senior Product Designer", "Pune HQ", "Employee@123"),
+    ("schopra", "Sameer Chopra", "employee", "BU_ENGINEERING", "Backend Engineer", "Bengaluru office", "Employee@123"),
+    ("dmishra", "Deepak Mishra", "employee", "BU_FINANCE", "Payroll Specialist", "Pune HQ", "Employee@123"),
     ("pnair", "Priya Nair", "employee", "BU_SALES", "Account Executive", "Remote", "Employee@123"),
-    ("jokafor", "Joy Okafor", "employee", "BU_HR", "HR Partner", "HQ", "Employee@123"),
-    ("lgarcia", "Luis Garcia", "employee", "BU_DESIGN", "UX Researcher", "NYC Campus", "Employee@123"),
-    ("tbrooks", "Tessa Brooks", "employee", "BU_FINANCE", "Financial Analyst", "HQ", "Employee@123"),
-    ("mkim", "Min Kim", "employee", "BU_ENGINEERING", "Data Engineer", "Remote", "Employee@123"),
-    ("rpatel", "Ravi Patel", "employee", "BU_SALES", "Sales Engineer", "HQ", "Employee@123"),
-    ("hsingh", "Harper Singh", "employee", "BU_HR", "Recruiter", "HQ", "Employee@123"),
-    ("ewhite", "Elena White", "employee", "BU_FINANCE", "Accountant", "HQ", "Employee@123"),
-    ("fzhang", "Felix Zhang", "employee", "BU_FINANCE", "Controller", "HQ", "Employee@123"),
-    ("gadams", "Grace Adams", "employee", "BU_FINANCE", "Accounts Payable Lead", "HQ", "Employee@123"),
-    ("kwright", "Kai Wright", "employee", "BU_ENGINEERING", "QA Engineer", "Remote", "Employee@123"),
-    ("bcooper", "Blair Cooper", "employee", "BU_SALES", "Sales Manager", "HQ", "Employee@123"),
+    ("jkale", "Jyoti Kale", "employee", "BU_HR", "HR Partner", "Pune HQ", "Employee@123"),
+    ("lghosh", "Lalit Ghosh", "employee", "BU_DESIGN", "UX Researcher", "Pune HQ", "Employee@123"),
+    ("tbhat", "Trupti Bhat", "employee", "BU_FINANCE", "Financial Analyst", "Pune HQ", "Employee@123"),
+    ("mkrishnan", "Mohan Krishnan", "employee", "BU_ENGINEERING", "Data Engineer", "Remote", "Employee@123"),
+    ("rpatel", "Ravi Patel", "employee", "BU_SALES", "Sales Engineer", "Mumbai office", "Employee@123"),
+    ("hsingh", "Harpreet Singh", "employee", "BU_HR", "Recruiter", "Pune HQ", "Employee@123"),
+    ("ewagh", "Esha Wagh", "employee", "BU_FINANCE", "Accountant", "Pune HQ", "Employee@123"),
+    ("fzaidi", "Farhan Zaidi", "employee", "BU_FINANCE", "Controller", "Pune HQ", "Employee@123"),
+    ("gapte", "Gauri Apte", "employee", "BU_FINANCE", "Accounts Payable Lead", "Pune HQ", "Employee@123"),
+    ("kwadekar", "Ketan Wadekar", "employee", "BU_ENGINEERING", "QA Engineer", "Remote", "Employee@123"),
+    ("bchitnis", "Bhavna Chitnis", "employee", "BU_SALES", "Sales Manager", "Mumbai office", "Employee@123"),
 ]
 
 
@@ -290,7 +290,7 @@ async def main(simulate: bool, demo_org: bool = True) -> None:
     print("\nDemo accounts (change these passwords outside local development):")
     print("  admin      / Admin@123     (administrator)")
     print("  itsupport  / Support@123   (IT support - Network Team; other teams: iam.agent, mail.agent, ...)")
-    print("  johndoe    / Employee@123  (employee; also arivera, schen, ewhite, ...)")
+    print("  asharma    / Employee@123  (employee; also rjain, schopra, ewagh, ...)")
     if demo:
         print(f"  Generated colleagues (e.g. {MARKER_USERNAME}) / {DEMO_PASSWORD}")
 

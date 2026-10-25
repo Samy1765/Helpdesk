@@ -61,7 +61,7 @@ async def test_role_based_access(client):
 
 
 async def test_refresh_token_flow_and_type_enforced(client):
-    r = await client.post("/api/v1/auth/login", json={"username": "johndoe", "password": "Employee@123"})
+    r = await client.post("/api/v1/auth/login", json={"username": "asharma", "password": "Employee@123"})
     tokens = r.json()
     # a refresh token must not work as an access token
     bad = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens['refresh_token']}"})

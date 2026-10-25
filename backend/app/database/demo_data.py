@@ -636,7 +636,7 @@ async def seed_demo_org(db, ref: dict, *, days: int = 90, tickets: int = 330) ->
     now = utcnow()
     # People whose reports are replayed live during seeding: keep their recent history quiet so the
     # replay is not flagged as duplicates of generated tickets.
-    live_users = {"bcooper", "ewhite", "fzhang", "gadams", "kwright"}
+    live_users = {"bchitnis", "ewagh", "fzaidi", "gapte", "kwadekar"}
 
     for n, (days_ago, *rest) in enumerate(INCIDENTS):
         same_cat = sum(1 for i in INCIDENTS[:n] if i[1] == rest[0])
@@ -652,9 +652,9 @@ async def seed_demo_org(db, ref: dict, *, days: int = 90, tickets: int = 330) ->
         recent = age_hours < 96  # the last few working days still have tickets with IT
         pool = [u for u in employees if not (recent and u.username in live_users)]
         user = rng.choice(pool)
-        # A few people raise a lot of tickets; John Doe gets a realistic personal history for the demo
+        # A few people raise a lot of tickets; Amit Sharma (the employee demo login) gets a realistic personal history for the demo
         if rng.random() < 0.025:
-            user = next(u for u in employees if u.username == "johndoe")
+            user = next(u for u in employees if u.username == "asharma")
         if made and rng.random() < 0.04 and not recent:
             orig, otpl, ouser = made[-1]
             if (at - orig.created_at).total_seconds() < 86400 and orig.status != TicketStatus.DUPLICATE:
@@ -664,10 +664,10 @@ async def seed_demo_org(db, ref: dict, *, days: int = 90, tickets: int = 330) ->
         priority = _weighted(rng, tpl.priorities)
         t = b.ticket(user, tpl, at, priority, rng.randint(0, 5))
         await db.flush()
-        if recent and user.username != "johndoe" and rng.random() < 0.55:
+        if recent and user.username != "asharma" and rng.random() < 0.55:
             await b.resolve_by_staff(t, tpl, user, at, open_state=rng.choice(["escalated", "assigned", "in_progress"]))
             counts["open"] += 1
-        elif recent and user.username == "johndoe" and tpl.category == "Hardware" and rng.random() < 0.5:
+        elif recent and user.username == "asharma" and tpl.category == "Hardware" and rng.random() < 0.5:
             await b.resolve_by_staff(t, tpl, user, at, open_state="in_progress")
             counts["open"] += 1
         elif tpl.intent in b.solutions and rng.random() < tpl.ai_share:

@@ -70,7 +70,7 @@
 
 ```bash
 TOKEN=$(curl -s localhost:8000/api/v1/auth/login -H 'Content-Type: application/json' \
-  -d '{"username":"johndoe","password":"Employee@123"}' | jq -r .access_token)
+  -d '{"username":"asharma","password":"Employee@123"}' | jq -r .access_token)
 H="Authorization: Bearer $TOKEN"
 
 curl -s localhost:8000/api/v1/chat/new -X POST -H "$H"
