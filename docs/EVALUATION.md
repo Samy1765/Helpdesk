@@ -9,7 +9,7 @@ python -m app.scripts.evaluate
 
 The script runs the **deterministic floor** of the system (no LLM) over `data/eval/eval_set.json`: 40 hand-labelled issue reports across all 10 categories and 20 labelled duplicate / non-duplicate pairs. The set is not used by the tests or the seed data, but it was written by the project author, so treat it as a sanity check on realistic phrasing — not an independent benchmark.
 
-## Results (all-MiniLM-L6-v2, measured 2026-09-25)
+## Results (all-MiniLM-L6-v2, measured 2026-09-25; category and priority re-checked 2026-10-25, unchanged)
 
 | Metric | Result |
 |---|---|
@@ -35,7 +35,7 @@ With an LLM configured, reports whose rule confidence is below 0.6 are re-classi
 
 `python -m app.database.seed` replays 11 employee reports through the real chat + agent pipeline (no LLM configured). Observed on both SQLite and PostgreSQL 16:
 
-* 3 email-outage reports from different users → **INCIDENT-EMAIL-001** created automatically; earlier reports switched to "linked to incident".
+* 3 email-outage reports from different users → an email incident created automatically (**INCIDENT-EMAIL-002** on a demo database, because the demo organisation already contains a resolved INCIDENT-EMAIL-001); earlier reports switched to "linked to incident".
 * A repeated printer report from the same user → marked **duplicate** of the first.
 * VPN MFA failure → **human-verified solution reused at L3 with zero LLM calls**, confirmed by the user → resolved; the solution's success counter incremented.
 * Account lockout → restricted `unlock_account` action approved by the employee → resolved.
@@ -44,4 +44,8 @@ With an LLM configured, reports whose rule confidence is below 0.6 are re-classi
 
 ## Test suite
 
-`pytest` — 79 tests covering authentication/RBAC, classification (all categories), priority rules, LLM output validation, FAISS persistence and drift-rebuild, retrieval gating, the knowledge trust ladder, agent state transitions, tool permissions, the safety filter, the LLM router (validation, cache, fallback), and end-to-end API workflows (resolve, retry→escalate, duplicates, incident correlation and resolution, approvals, IT resolution becoming reusable knowledge, analytics consistency, attachments). **All pass on SQLite and on PostgreSQL 16.2.**
+`pytest` — 142 tests covering authentication/RBAC (including a 403 check on every staff/admin route), account lockout, rate limiting, token revocation, security headers, CORS, upload content checks, prompt-injection fencing, classification (all categories), priority rules, LLM output validation, FAISS persistence and drift-rebuild, retrieval gating, the knowledge trust ladder, agent state transitions, tool permissions, the safety filter, the LLM router (validation, cache, fallback), and end-to-end API workflows (resolve, retry→escalate, duplicates, incident correlation and resolution, approvals, IT resolution becoming reusable knowledge, analytics consistency, attachments), and the seed data: no 8-word sequence of the evaluation set appears in the knowledge base, seed files or demo generator, and the demo organisation seeds consistently. **All pass in CI on PostgreSQL 16 with `all-MiniLM-L6-v2`.** Two retrieval tests need the real embedding model and fail with the hashing fallback (`EMBEDDING_BACKEND=hashing`), which is expected.
+
+## About the demo database
+
+The 90-day demo organisation (`backend/app/database/demo_data.py`) is generated, not measured. Its dashboards show how the system presents a quarter of activity; the numbers on them are not results and should not be quoted as such. Tickets the assistant "resolved" in that data stay on levels L1–L3, so it never claims language-model usage that did not happen.

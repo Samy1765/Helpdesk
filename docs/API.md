@@ -7,13 +7,13 @@
 ## Authentication
 | Method | Path | Who | Notes |
 |---|---|---|---|
-| POST | `/auth/register` | public | always creates an **employee**; returns tokens + user |
-| POST | `/auth/login` | public | `{username (or email), password}` → access + refresh tokens |
-| POST | `/auth/token` | public | OAuth2 form flow (Swagger) |
-| POST | `/auth/refresh` | public | `{refresh_token}`; refresh tokens cannot be used as access tokens |
-| POST | `/auth/logout` | any | audited; client discards tokens |
+| POST | `/auth/register` | public | always creates an **employee**; returns tokens + user; rate limited (429) |
+| POST | `/auth/login` | public | `{username (or email), password}` → access + refresh tokens; rate limited; account locks after 5 failures |
+| POST | `/auth/token` | public | OAuth2 form flow (Swagger); same limits as login |
+| POST | `/auth/refresh` | public | `{refresh_token}` → new token pair; rejected after logout / password change; refresh tokens cannot be used as access tokens |
+| POST | `/auth/logout` | any | revokes all of the user's tokens; audited |
 | GET/PATCH | `/auth/me` | any | profile |
-| POST | `/auth/change-password` | any | |
+| POST | `/auth/change-password` | any | revokes other sessions; returns a fresh token pair for this one |
 
 ## Chatbot
 | Method | Path | Notes |

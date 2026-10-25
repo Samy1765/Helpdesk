@@ -11,7 +11,7 @@ docker compose up -d --build
 docker compose --profile llm up -d && docker compose exec ollama ollama pull llama3.2
 ```
 
-The app container runs `alembic upgrade head` on every start (idempotent), optionally seeds demo data, then serves API + SPA on port 8000 with one worker. Volumes: `pgdata` (PostgreSQL), `faiss` (indexes — rebuilt automatically from PostgreSQL if lost), `uploads`.
+The app container runs `alembic upgrade head` on every start (idempotent), optionally seeds demo data (`SEED_DEMO_DATA=true`: demo accounts, 40 runbooks, a 90-day synthetic demo organisation and a live replay; only on an empty database), then serves API + SPA on port 8000 with one worker. Volumes: `pgdata` (PostgreSQL), `faiss` (indexes — rebuilt automatically from PostgreSQL if lost), `uploads`.
 
 ## Option B — Cloud (container platform + managed PostgreSQL)
 
@@ -26,7 +26,9 @@ Works on AWS ECS/Fargate, Azure Container Apps, Google Cloud Run (min instances 
 
 ## Production checklist
 
-- [ ] `APP_ENV=production` (the app refuses to start with the default `SECRET_KEY`)
+- [ ] `APP_ENV=production` (the app refuses to start with a placeholder or shorter-than-32-character `SECRET_KEY`; HSTS is sent only in production, so serve it over TLS)
+- [ ] Review `LOGIN_MAX_FAILURES`, `LOGIN_LOCKOUT_MINUTES`, `AUTH_RATE_LIMIT_PER_MINUTE` and `MAX_REQUEST_MB` (the rate limiter is per process)
+- [ ] Only expose the container behind your TLS proxy: it trusts `X-Forwarded-For` (`--forwarded-allow-ips="*"` in `docker/entrypoint.sh`), so a client reaching it directly could fake its address and avoid the per-address sign-in limit (account lockout still applies). Narrow that setting to the proxy's address if you can
 - [ ] Unique `SECRET_KEY`, database password and LLM keys stored as secrets — never in git
 - [ ] `SEED_DEMO_DATA=false` plus `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` — the container then runs `python -m app.scripts.bootstrap` (roles, teams, categories, IT knowledge base, first admin; no demo users or tickets)
 - [ ] Replace example hosts in `data/service_catalog.json` with real endpoints (VPN gateway, mail, DB listeners)

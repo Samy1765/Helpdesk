@@ -92,7 +92,7 @@ Transitions are validated (`assert_transition`); an invalid jump raises. Any non
 
 * There is **no arbitrary-shell tool**; unknown tool names are recorded as `blocked`.
 * State-changing actions go through an `ActionConnector`. The shipped connector is a **dry run** (records the approved action) — wire an endpoint-management/identity connector in `tools/executor.py:get_connector()` for production.
-* Generated text passes `tools/safety.py` (destructive commands, disabling security software, credential requests); unsafe steps are removed and flagged.
+* Generated text passes `tools/safety.py` (destructive commands, disabling security software or MFA, credential requests, privilege escalation, backup deletion, echoed prompt injection); unsafe steps are removed and flagged. Employee-written text is wrapped in `<user_report>` tags in every prompt and the system prompts say it is data, not instructions.
 * LLM JSON is always schema-validated (pydantic); categories outside the active set, missing citations for grounded answers, or malformed output are rejected.
 
 ## 6. Data model (PostgreSQL)
@@ -153,4 +153,5 @@ Structured logs (structlog, JSON in production) with a request id per HTTP call 
 * **Restricted actions are dry-run** until a real endpoint-management / identity connector is configured.
 * **Diagnostics are server-side.** SAFE probes check services from the helpdesk host (per `data/service_catalog.json`), not the employee's device; device-side steps are given to the user.
 * **Rules classifier** reaches 87.5% on the small held-out set (see `docs/EVALUATION.md`); misses are routed to the LLM when one is configured, and IT can correct category/priority.
-* JWT logout is client-side (tokens expire); add a deny-list for immediate revocation if required.
+* Tokens are revoked per user (a `token_version` claim), not per session: logging out signs that person out of every browser.
+* The sign-in rate limiter is in memory, per process; with several API replicas it would need a shared store such as Redis.

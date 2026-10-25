@@ -10,7 +10,7 @@ Employees describe a problem to a chatbot instead of emailing IT. Precision AI u
 | Database | **PostgreSQL** (source of truth; SQLite supported for zero-setup local runs) |
 | Vector search | **FAISS** (exact cosine, keyed by database ids, auto-rebuilt) · sentence-transformers `all-MiniLM-L6-v2` |
 | LLMs (optional) | Provider-agnostic: Ollama (local), Groq, OpenAI, Gemini, with small/large tiers and fallback |
-| Frontend | React 19 · TypeScript · Vite · Tailwind CSS v4 · Recharts |
+| Frontend | React 19 · TypeScript · Vite · Tailwind CSS v4 · Recharts · self-hosted IBM Plex fonts |
 | Ops | Multi-stage Docker image · docker-compose (PostgreSQL + optional Ollama) · GitHub Actions CI |
 
 ## What it does
@@ -20,7 +20,8 @@ Employees describe a problem to a chatbot instead of emailing IT. Precision AI u
 * **Priority validation**: impact × severity rules, plus a clamped LLM opinion when the rules are unsure. The employee's priority is never silently overridden: both values are stored and an alert explains the difference.
 * **Duplicate detection and incident correlation**: repeat reports from the same user are linked instead of re-worked. When three or more employees report the same thing within 60 minutes, their tickets are grouped into an incident (e.g. `INCIDENT-EMAIL-001`), troubleshooting stops, and resolving the incident closes every linked ticket.
 * **Cost-optimised routing (levels L0 to L5)**: deterministic policy → rules → similarity → verified-knowledge reuse (no LLM) → small/local model → large model only on retries or ambiguity. Every LLM call, token and cache hit is tracked.
-* **RAG with provenance**: answers are labelled *VERIFIED*, *HUMAN-APPROVED*, *USER-CONFIRMED* or *AI-GENERATED*. Generated steps must cite retrieved sources and pass a safety filter.
+* **RAG with provenance**: every suggested fix shows how far it can be trusted (verified fix, approved by IT, confirmed by users, or suggested by AI). Generated steps must cite retrieved sources and pass a safety filter.
+* **Knowledge base**: 40 runbooks across all ten categories (symptoms, numbered steps, when to escalate), plus fixes that IT verified on earlier tickets.
 * **Troubleshooting agent**: a persistent state machine (UNDERSTAND → … → VERIFY → RESOLVED / RETRY / ESCALATE). SAFE diagnostics run automatically, RESTRICTED actions need the employee's approval, and DANGEROUS ones need an admin's. There is no arbitrary-shell tool.
 * **Escalation engine**: routes each category to its owning team, auto-assigns the least-loaded agent, and attaches a package (attempts, diagnostics, retrieved knowledge, decision summary; never hidden reasoning).
 * **IT support console**: queues, accept/assign, notes, steps, resolve-as-knowledge, correct category/priority, verify/reject AI knowledge, approvals.
@@ -117,7 +118,9 @@ npm run build      # build once; the backend then serves the UI at http://localh
 | IT support | `itsupport` (Network), `iam.agent`, `mail.agent`, `hw.agent`, `sec.agent`, `dba.agent`, `ops.agent`, `app.agent`, `print.agent`, `desk.agent` | `Support@123` |
 | Admin | `admin` | `Admin@123` |
 
-All seed people, tickets and emails are synthetic (`@example.com`). For a real deployment use `SEED_DEMO_DATA=false` and the bootstrap admin variables (see the [deployment guide](docs/DEPLOYMENT.md)).
+The seed also creates a **demo organisation** so the dashboards have something to show: 45 more employees, two more IT staff and a second admin (`rutuja.patil`), about 330 tickets spread over the last 90 days, four past incidents, feedback ratings and verified fixes ([`backend/app/database/demo_data.py`](backend/app/database/demo_data.py)). The generated people sign in with `Demo@12345` (for example `aarav.kulkarni`). Skip it with `python -m app.database.seed --no-demo-org`.
+
+Everything in the seed is synthetic: invented people, `@example.com` addresses and invented tickets. The analytics on a demo database describe this sample data, **not** measured performance; the measured results are in [EVALUATION.md](docs/EVALUATION.md). For a real deployment use `SEED_DEMO_DATA=false` and the bootstrap admin variables (see the [deployment guide](docs/DEPLOYMENT.md)).
 
 ### Enabling LLMs (optional)
 
@@ -170,13 +173,13 @@ The code lives on GitHub, so the other person does **not** need a copy of your f
 
 ```bash
 cd backend
-pytest -q                                                            # 79 tests on SQLite
+pytest -q                                                            # 142 tests on SQLite
 TEST_DATABASE_URL=postgresql+asyncpg://user:pass@host/db pytest -q   # same suite on PostgreSQL
 python -m app.scripts.evaluate                                       # held-out accuracy / duplicate precision-recall
 cd ../frontend && npm run typecheck && npm run build
 ```
 
-Latest run: **79/79 tests pass on SQLite and on PostgreSQL 16**. On the held-out set, the rules-only classifier reaches 87.5% category accuracy, priority is within one level 97.5% of the time, and duplicate detection scores 0.82 precision / 0.90 recall ([details and known misses](docs/EVALUATION.md)).
+Latest run: **142/142 tests pass in CI** (PostgreSQL 16, `all-MiniLM-L6-v2`). On the held-out set, the rules-only classifier reaches 87.5% category accuracy, priority is within one level 97.5% of the time, and duplicate detection scores 0.82 precision / 0.90 recall ([details and known misses](docs/EVALUATION.md)).
 
 ## Repository layout
 
@@ -206,9 +209,12 @@ docker/  Dockerfile  docker-compose.yml  .env.example  run-local.ps1  .github/wo
 ## Security notes
 
 * Passwords are hashed with bcrypt.
-* JWT access tokens are short-lived and paired with refresh tokens.
-* Roles are enforced server-side on every endpoint, and employees can only read their own tickets and attachments.
-* Logs redact secret-like fields.
-* Uploads are limited by type and size, and stored under random names.
-* `.env` is git-ignored.
+* An account is locked for 15 minutes after 5 wrong passwords, and sign-in and registration are limited to 10 attempts per minute per address. Every failure gets the same message, so responses do not reveal whether a username exists.
+* JWT access tokens are short-lived and paired with refresh tokens (PyJWT). Logging out, changing the password, a role change or deactivation revokes every token issued before it.
+* Roles are enforced server-side on every endpoint (a test checks all 27 staff and admin routes return 403 to employees), and employees can only read their own tickets and attachments.
+* Responses carry a Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, a referrer policy and, in production, HSTS. CORS allows only the methods and headers the app uses, and large request bodies are refused.
+* Uploads are limited by size and type; the file's first bytes must match its declared type. Files are stored under random names.
+* Text written by employees is fenced off in LLM prompts, and the models are told not to follow instructions inside it. The output filter removes credential requests, MFA or security-control changes, privilege escalation and backup deletion.
+* Production refuses to start with a placeholder or short `SECRET_KEY`.
+* Logs redact secret-like fields, and `.env` is git-ignored. Sign-in failures, lockouts, token revocations and role changes are written to the audit log.
 * Restricted device and identity actions are only recorded (dry-run mode) until a real connector is configured. See the limitations section of the [architecture doc](docs/ARCHITECTURE.md).

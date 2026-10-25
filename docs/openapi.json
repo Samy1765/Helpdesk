@@ -130,6 +130,7 @@
           "Authentication"
         ],
         "summary": "Refresh",
+        "description": "Exchange a refresh token for a new token pair. Tokens issued before the last logout,\npassword change or deactivation are rejected.",
         "operationId": "refresh_api_v1_auth_refresh_post",
         "requestBody": {
           "content": {
@@ -169,7 +170,7 @@
           "Authentication"
         ],
         "summary": "Logout",
-        "description": "JWTs are stateless: the client discards its tokens. The logout is recorded for auditing.",
+        "description": "Revokes every token issued to this user (all signed-in browsers), then records the logout.",
         "operationId": "logout_api_v1_auth_logout_post",
         "responses": {
           "200": {
