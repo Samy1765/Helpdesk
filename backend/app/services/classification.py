@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.llm import router as llm
+from app.llm.untrusted import UNTRUSTED_RULES, untrusted
 from app.models.ticket import TicketCategory
 
 logger = get_logger(__name__)
@@ -339,9 +340,9 @@ async def _classify_with_llm(text, categories, db, ticket_id) -> Optional[LLMCla
         "You classify IT helpdesk issues. Respond with ONLY a JSON object with keys: "
         '"category" (exactly one of: ' + names + '), "sub_category", "intent" (snake_case), '
         '"entities" (object of short strings: os, device, application, error_code), '
-        '"confidence" (0-1), "title" (max 10 words). Do not invent details not in the text.'
+        '"confidence" (0-1), "title" (max 10 words). Do not invent details not in the text. ' + UNTRUSTED_RULES
     )
-    res = await llm.complete(db=db, purpose="classification", tier=llm.SMALL, prompt=f"Issue:\n{text[:2500]}",
+    res = await llm.complete(db=db, purpose="classification", tier=llm.SMALL, prompt=untrusted("issue", text, 2500),
                              system_prompt=system, schema=LLMClassification, max_tokens=300,
                              ticket_id=ticket_id)
     if res is None or res.parsed is None:

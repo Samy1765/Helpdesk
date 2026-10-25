@@ -32,16 +32,26 @@ export class ApiError extends Error {
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn; }
 
-async function tryRefresh(): Promise<boolean> {
-  const refresh = tokens.refresh;
-  if (!refresh) return false;
-  const r = await fetch(`${BASE}/auth/refresh`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refresh }),
-  });
-  if (!r.ok) return false;
-  const body = await r.json();
-  tokens.set(body.access_token, body.refresh_token);
-  return true;
+// Refresh tokens rotate on every use and a replayed one ends the session, so concurrent 401s share one refresh.
+let refreshing: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  refreshing ??= (async () => {
+    const refresh = tokens.refresh;
+    if (!refresh) return false;
+    try {
+      const r = await fetch(`${BASE}/auth/refresh`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refresh }),
+      });
+      if (!r.ok) return false;
+      const body = await r.json();
+      tokens.set(body.access_token, body.refresh_token);
+      return true;
+    } catch {
+      return false;
+    }
+  })().finally(() => { refreshing = null; });
+  return refreshing;
 }
 
 function errorMessage(body: unknown, fallback: string): string {
@@ -63,10 +73,11 @@ export async function request<T>(path: string, init: RequestInit = {}, retry = t
   const access = tokens.access;
   if (access) headers.set("Authorization", `Bearer ${access}`);
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
-  if (res.status === 401 && retry && path !== "/auth/login" && (await tryRefresh())) {
+  const signIn = path === "/auth/login" || path === "/auth/register";
+  if (res.status === 401 && retry && !signIn && (await tryRefresh())) {
     return request<T>(path, init, false);
   }
-  if (res.status === 401 && path !== "/auth/login") {
+  if (res.status === 401 && !signIn) {
     tokens.clear();
     onUnauthorized?.();
   }

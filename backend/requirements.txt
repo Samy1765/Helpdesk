@@ -9,8 +9,8 @@ asyncpg>=0.30
 aiosqlite>=0.20
 alembic>=1.13
 
-# Auth
-python-jose[cryptography]>=3.3
+# Auth (PyJWT replaces python-jose, which has unfixed advisories PYSEC-2026-4298 / ecdsa PYSEC-2026-1325)
+pyjwt>=2.10
 bcrypt>=4.1
 email-validator>=2.1
 
@@ -29,3 +29,7 @@ sentence-transformers>=3.0
 # Logging
 structlog>=24.1
 greenlet>=3.0          # required by SQLAlchemy's async engine
+
+# Security floors for transitive dependencies (pip-audit: CVE-2026-112907/112913/112940, GHSA-xmj3-9gf7-h52w)
+filelock>=4.2.1
+setuptools>=84.1.0

@@ -10,7 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.serializers import document_out, solution_out
-from app.core.deps import STAFF_ROLES, get_current_user, require_role
+from app.core.deps import STAFF_ROLES, get_current_user, is_staff, require_role
 from app.database import get_db
 from app.models.knowledge import KnowledgeDocument
 from app.models.ticket import SolutionConfidence, TicketCategory
@@ -19,6 +19,9 @@ from app.rag.retriever import retrieve
 from app.services import knowledge, tickets as ticket_svc
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge base"])
+
+# Taken from another employee's ticket: shown to IT staff only
+TICKET_DERIVED_FIELDS = ("problem_description", "symptoms", "ticket_id", "ticket_number")
 
 
 class DocumentIn(BaseModel):
@@ -61,14 +64,19 @@ async def semantic_search(q: str = Query(min_length=3, max_length=500), category
                           db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Semantic search over verified solutions and IT documentation (FAISS + PostgreSQL)."""
     r = await retrieve(db, q, category_id=category_id, intent=None)
+    staff = is_staff(user)
+
+    def solution(h) -> dict:
+        out = {**solution_out(h.solution, h.source_ticket_number), "similarity": round(h.similarity, 3)}
+        return out if staff else {k: (None if k in TICKET_DERIVED_FIELDS else v) for k, v in out.items()}
+
     return {
         "documents": [{"chunk_id": h.chunk.id, "ref": h.ref, "document_id": h.chunk.document_id,
                        "title": h.chunk.document.title, "heading": h.chunk.heading,
                        "excerpt": h.chunk.content[:400], "similarity": round(h.similarity, 3),
                        "category": h.chunk.document.category.name if h.chunk.document.category else None}
                       for h in r.chunks[:8]],
-        "solutions": [{**solution_out(h.solution, h.source_ticket_number), "similarity": round(h.similarity, 3)}
-                      for h in r.solutions[:6]],
+        "solutions": [solution(h) for h in r.solutions[:6]],
     }
 
 

@@ -14,6 +14,7 @@ from app.agents import troubleshooting_agent as agent
 from app.agents.state_machine import AgentState
 from app.api.serializers import incident_out, iso, message_out, ticket_out
 from app.core.deps import get_current_user, is_staff
+from app.core.ratelimit import enforce_chat_budget
 from app.database import get_db
 from app.models.agent import AgentAction, Incident
 from app.models.attachment import Attachment
@@ -104,6 +105,7 @@ async def list_tickets(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_ticket(data: TicketIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Manual ticket (portal form). Goes through the same classification, priority and agent pipeline."""
+    enforce_chat_budget(user.id)
     text = f"{data.title}. {data.description}"
     c = await cls_svc.classify(text, db)
     p = await prio_svc.assess_priority(text, db, category=c.category, entities=c.entities,

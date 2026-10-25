@@ -10,9 +10,10 @@ from app.models.agent import AgentAction, AgentRun, AuditLog, Incident, LLMUsage
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.conversation import Conversation
 from app.models.attachment import Attachment
+from app.models.auth import AuthSession, LoginThrottle
 
 __all__ = [
-    "Attachment",
+    "Attachment", "AuthSession", "LoginThrottle",
     "Department", "Role", "User", "SolutionConfidence", "Ticket", "TicketAssignment",
     "TicketCategory", "TicketEscalation", "TicketEvent", "TicketFeedback", "TicketMessage",
     "TicketSolution", "TicketStatus", "TroubleshootingStep", "AgentAction", "AgentRun",

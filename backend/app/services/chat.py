@@ -61,6 +61,14 @@ DEFAULT_SYMPTOM = ("Could you tell me a bit more - what were you trying to do, a
 SCOPE_QUESTION = ("Is anyone else affected?", ["Just me", "A few colleagues", "My whole team / department",
                                                "Everyone in the company"])
 
+# Intake messages and clarifying answers are appended; keep the total inside TicketDraft's 8,000-character limit
+MAX_DESCRIPTION_CHARS = 7500
+
+
+def _capped(description: str) -> str:
+    return description[:MAX_DESCRIPTION_CHARS].strip()
+
+
 GREETING = re.compile(r"^\s*(hi|hello|hey|good (morning|afternoon|evening)|hiya|help|yo)\W*$", re.I)
 YES = re.compile(r"^\s*(yes|yep|yeah|y|ok it works|it works|worked|fixed|resolved|solved|that (did it|worked|fixed it)|all good|it'?s fixed)\b", re.I)
 NO = re.compile(r"^\s*(no|nope|nah|n|still|didn'?t|doesn'?t|not (working|fixed|resolved)|it'?s still|same (issue|problem))\b", re.I)
@@ -173,7 +181,7 @@ async def _handle_intake(db, user: User, conv: Conversation, text: str, user_pri
         return await _reply(db, conv, f"Hi {first}! Describe the IT issue you're facing - for example "
                                       f"\"My VPN times out after I enter my 2FA code\" - and I'll take it from there.")
     slots = _slots(conv)
-    description = (slots.get("description", "") + "\n" + text).strip()
+    description = _capped(slots.get("description", "") + "\n" + text)
     slots["description"] = description
     if user_priority:
         slots["user_priority"] = user_priority
@@ -225,7 +233,7 @@ async def _handle_clarifying(db, user: User, conv: Conversation, text: str, user
     slots = _slots(conv)
     asking = slots.get("asking")
     label = "Symptoms" if asking == "symptom" else "Scope"
-    slots["description"] = f"{slots.get('description', '')}\n{label}: {text}".strip()
+    slots["description"] = _capped(f"{slots.get('description', '')}\n{label}: {text}")
     slots.setdefault("answers", {})[asking or "extra"] = text
     slots["pending"] = [q for q in slots.get("pending", []) if q != asking]
     if user_priority:

@@ -222,8 +222,11 @@ async def start(db: AsyncSession, ticket: Ticket, user: User, *, intake: dict,
     ctx["retrieval"] = retrieval.summary()
     _save(run, ctx)
     _progress(run, "knowledge", "done")
+    # Same rule as the ticket page: other employees' tickets are shown only once they are resolved
+    visible = [h for h in retrieval.similar_tickets
+               if h.ticket.status in TicketStatus.DONE or h.ticket.user_id == ticket.user_id]
     payload["similar"] = [{"number": h.ticket.ticket_number, "title": h.ticket.title, "status": h.ticket.status,
-                           "similarity": round(h.similarity, 3)} for h in retrieval.similar_tickets[:3]]
+                           "similarity": round(h.similarity, 3)} for h in visible[:3]]
     best = retrieval.solutions[0] if retrieval.solutions else None
     await ticket_svc.add_step(
         db, ticket, step_key="search_history", title="Vector similarity search",

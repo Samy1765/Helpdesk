@@ -4,7 +4,7 @@ Precision AI - Administration: analytics, users, categories, system status, inde
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +18,7 @@ from app.models.agent import AuditLog, LLMUsageLog
 from app.models.department import Department
 from app.models.ticket import TicketCategory
 from app.models.user import Role, User
-from app.services import analytics, tickets as ticket_svc
+from app.services import analytics, auth as auth_svc, tickets as ticket_svc
 from app.vector_store import get_index_manager
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -52,7 +52,7 @@ async def list_users(db: AsyncSession = Depends(get_db), user: User = Depends(ad
 
 
 @router.patch("/users/{user_id}")
-async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends(get_db),
+async def update_user(user_id: int, data: UserUpdate, request: Request, db: AsyncSession = Depends(get_db),
                       admin: User = Depends(admin_only)):
     target = await db.get(User, user_id)
     if target is None:
@@ -60,15 +60,29 @@ async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends
     if target.id == admin.id and (data.role not in (None, "admin") or data.is_active is False):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot demote or deactivate yourself")
     changes = data.model_dump(exclude_unset=True)
-    if data.role:
+    ip = request.client.host if request.client else None
+    if "department_id" in changes and data.department_id is not None:
+        dept = await db.get(Department, data.department_id)
+        if dept is None or not dept.is_active:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown department")
+    if data.role and data.role != target.role_name:
         role = (await db.execute(select(Role).where(Role.name == data.role))).scalar_one()
+        await ticket_svc.audit(db, "role_changed", user_id=admin.id, resource_type="user", resource_id=target.id,
+                               ip_address=ip, details={"from": target.role_name, "to": data.role})
+        # authorisation reads the role from the database on every request, so the change applies immediately
         target.role_id = role.id
-    if data.is_active is not None:
+        target.role = role
+    if data.is_active is not None and data.is_active != target.is_active:
         target.is_active = data.is_active
-    if "department_id" in changes:
+        action = "user_reactivated" if data.is_active else "user_deactivated"
+        await ticket_svc.audit(db, action, user_id=admin.id, resource_type="user", resource_id=target.id, ip_address=ip)
+        if not data.is_active:
+            await auth_svc.revoke_user_sessions(db, target.id, "deactivated")
+    if "department_id" in changes and data.department_id != target.department_id:
+        await ticket_svc.audit(db, "user_department_changed", user_id=admin.id, resource_type="user",
+                               resource_id=target.id, ip_address=ip,
+                               details={"from": target.department_id, "to": data.department_id})
         target.department_id = data.department_id
-    await ticket_svc.audit(db, "user_updated", user_id=admin.id, resource_type="user", resource_id=target.id,
-                           details=changes)
     await db.flush()
     await db.refresh(target)
     return user_out(target)

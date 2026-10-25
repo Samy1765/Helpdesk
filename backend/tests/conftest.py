@@ -22,6 +22,10 @@ os.environ.update({
     "SERVE_FRONTEND": "false",
     "LOG_LEVEL": "WARNING",
     "EMBEDDING_BACKEND": "sentence-transformers",
+    # Every test registers its own users from one client IP; the limits themselves are tested in test_security.py
+    "RATE_LIMIT_REGISTER_PER_HOUR": "100000",
+    "RATE_LIMIT_LOGIN_FAILURES_PER_IP": "100000",
+    "RATE_LIMIT_CHAT_PER_MINUTE": "100000",
 })
 
 import pytest_asyncio  # noqa: E402

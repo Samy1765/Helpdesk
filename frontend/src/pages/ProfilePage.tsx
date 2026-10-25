@@ -7,7 +7,7 @@ import { api } from "../services/api";
 import { Avatar, Badge, ErrorNote, Field, KeyValue, PageHeader, shortDate, titleCase } from "../components/ui";
 
 export default function ProfilePage() {
-  const { user, refreshUser, logout } = useAuth();
+  const { user, refreshUser, logout, changePassword } = useAuth();
   const navigate = useNavigate();
   const { data: departments } = useApi<{ id: number; name: string }[]>("/meta/departments");
   const [form, setForm] = useState({ full_name: user?.full_name || "", job_title: user?.job_title || "", location: user?.location || "", department_id: user?.department_id ?? "" });
@@ -25,7 +25,7 @@ export default function ProfilePage() {
   };
   const changePw = async (e: FormEvent) => {
     e.preventDefault(); setMsg(null); setErr(null);
-    try { await api.post("/auth/change-password", pw); setPw({ current_password: "", new_password: "" }); setMsg("Password changed"); }
+    try { await changePassword(pw.current_password, pw.new_password); setPw({ current_password: "", new_password: "" }); setMsg("Password changed. Other devices have been signed out."); }
     catch (e2) { setErr(e2 instanceof Error ? e2.message : "Failed"); }
   };
 

@@ -21,8 +21,10 @@ COPY backend/requirements.txt ./
 RUN pip install torch --index-url https://download.pytorch.org/whl/cpu \
  && pip install -r requirements.txt
 
-# Bake the embedding model into the image so containers start offline
+# Bake the embedding model into the image, then forbid Hub lookups so containers start and run offline
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
 
 COPY backend/ ./
 COPY data/ /app/data/

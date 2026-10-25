@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.llm import router as llm
+from app.llm.untrusted import UNTRUSTED_RULES, untrusted
 
 logger = get_logger(__name__)
 
@@ -169,9 +170,9 @@ async def assess_priority(
         system = ("You assess IT ticket priority objectively. LOW: cosmetic/non-urgent. MEDIUM: one user's work "
                   "affected. HIGH: several users, production systems, or blocking critical work. CRITICAL: "
                   "production outage, security breach, organisation-wide impact. Do not inflate. Respond ONLY "
-                  'with JSON: {"system_priority": "...", "confidence": 0-1, "reason": "one sentence"}')
+                  'with JSON: {"system_priority": "...", "confidence": 0-1, "reason": "one sentence"}. ' + UNTRUSTED_RULES)
         res = await llm.complete(db=db, purpose="priority", tier=llm.SMALL, system_prompt=system,
-                                 prompt=f"Category: {category}\nIssue:\n{text[:2000]}", schema=LLMPriority,
+                                 prompt=f"Category: {category}\n" + untrusted("issue", text, 2000), schema=LLMPriority,
                                  max_tokens=150, ticket_id=ticket_id)
         if res is not None and res.parsed is not None:
             p: LLMPriority = res.parsed  # type: ignore[assignment]

@@ -30,7 +30,10 @@ class SentenceTransformerEmbedder:
     def __init__(self, model_name: str):
         from sentence_transformers import SentenceTransformer  # heavy import, done lazily
 
-        self._model = SentenceTransformer(model_name, device="cpu")
+        try:  # cached model first: no network round-trip, so an offline demo starts immediately
+            self._model = SentenceTransformer(model_name, device="cpu", local_files_only=True)
+        except Exception:  # first run: download it once
+            self._model = SentenceTransformer(model_name, device="cpu")
         self.dim = int(self._model.get_embedding_dimension()
                        if hasattr(self._model, "get_embedding_dimension")
                        else self._model.get_sentence_embedding_dimension())

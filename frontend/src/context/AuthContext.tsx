@@ -8,6 +8,8 @@ interface AuthState {
   login: (username: string, password: string) => Promise<User>;
   register: (data: { email: string; username: string; password: string; full_name: string; department_id?: number | null; job_title?: string }) => Promise<User>;
   logout: () => Promise<void>;
+  /** Changing the password signs out every session; the response carries tokens for a fresh one. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   isStaff: boolean;
 }
@@ -44,6 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return r.user;
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const r = await api.post<TokenResponse>("/auth/change-password",
+      { current_password: currentPassword, new_password: newPassword });
+    tokens.set(r.access_token, r.refresh_token);
+    setUser(r.user);
+  }, []);
+
   const logout = useCallback(async () => {
     try { await api.post("/auth/logout"); } catch { /* token may already be invalid */ }
     tokens.clear();
@@ -51,9 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({
-    user, loading, login, register, logout, refreshUser,
+    user, loading, login, register, logout, changePassword, refreshUser,
     isStaff: user?.role === "it_support" || user?.role === "admin",
-  }), [user, loading, login, register, logout, refreshUser]);
+  }), [user, loading, login, register, logout, changePassword, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

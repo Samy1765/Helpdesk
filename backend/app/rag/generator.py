@@ -19,11 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.llm import router as llm
+from app.llm.untrusted import UNTRUSTED_RULES, untrusted
 from app.models.ticket import SolutionConfidence, Ticket
 from app.rag.retriever import ChunkHit, Retrieval, SolutionHit
 from app.services.knowledge import steps_from_text
 from app.tools.registry import get_tool
-from app.tools.safety import filter_steps, screen_text
+from app.tools.safety import filter_generated_steps, filter_steps, screen_text, unverified_references
 
 logger = get_logger(__name__)
 
@@ -90,12 +91,13 @@ def from_chunk(hit: ChunkHit) -> Candidate:
 
 
 SYSTEM_GROUNDED = (
-    "You are an IT support troubleshooting assistant. Using ONLY the numbered context sources, write "
-    "clear steps an employee can safely perform themselves. Never invent procedures, commands, URLs or "
-    "phone numbers that are not in the context. Never ask for passwords or MFA codes. Never suggest "
-    "disabling security software, deleting system files, editing the registry or running admin commands. "
-    "If the context does not cover the issue, set can_resolve to false. Respond ONLY with JSON: "
-    '{"summary": "...", "steps": ["..."], "sources": ["KB-1"], "confidence": 0-1, "can_resolve": true}'
+    "You are an IT support troubleshooting assistant. Using ONLY the context sources (each block's name is its "
+    "reference, e.g. KB-12), write clear steps an employee can safely perform themselves. Never invent "
+    "procedures, commands, URLs or phone numbers that are not in the context. Never ask for passwords or MFA "
+    "codes. Never suggest disabling security software, deleting system files, editing the registry or running "
+    "admin commands. If the context does not cover the issue, set can_resolve to false. Respond ONLY with JSON: "
+    '{"summary": "...", "steps": ["..."], "sources": ["KB-1"], "confidence": 0-1, "can_resolve": true}. '
+    + UNTRUSTED_RULES
 )
 
 SYSTEM_UNGROUNDED = (
@@ -104,7 +106,7 @@ SYSTEM_UNGROUNDED = (
     "update). Never ask for passwords or MFA codes, never suggest disabling security software, deleting "
     "files, editing the registry or running admin commands. If unsure, set can_resolve to false. "
     'Respond ONLY with JSON: {"summary": "...", "steps": ["..."], "sources": [], "confidence": 0-1, '
-    '"can_resolve": true}'
+    '"can_resolve": true}. ' + UNTRUSTED_RULES
 )
 
 
@@ -117,7 +119,7 @@ def _issue_block(ticket: Ticket, previous: list[Candidate], evidence: list[dict]
     if previous:
         lines.append("Already tried WITHOUT success (do not repeat): " + " | ".join(
             "; ".join(c.steps[:4]) for c in previous))
-    return "\n".join(lines)
+    return untrusted("ticket", "\n".join(lines), 4000)
 
 
 async def generate(db: AsyncSession, ticket: Ticket, retrieval: Retrieval, *, previous: list[Candidate],
@@ -132,8 +134,8 @@ async def generate(db: AsyncSession, ticket: Ticket, retrieval: Retrieval, *, pr
     grounded = bool(context_items)
     prompt = _issue_block(ticket, previous, evidence)
     if grounded:
-        prompt = "Context sources:\n" + "\n\n".join(f"[{ref}] {txt[:1200]}" for ref, txt in context_items) \
-                 + "\n\n" + prompt
+        prompt = "Context sources:\n" + "\n\n".join(untrusted(ref, txt, 1200) for ref, txt in context_items) \
+                 + "\n\nThe employee's issue:\n" + prompt
     res = await llm.complete(
         db=db, purpose="troubleshooting", tier=tier, prompt=prompt,
         system_prompt=SYSTEM_GROUNDED if grounded else SYSTEM_UNGROUNDED, schema=GeneratedSolution,
@@ -150,9 +152,12 @@ async def generate(db: AsyncSession, ticket: Ticket, retrieval: Retrieval, *, pr
     if grounded and not cited:
         logger.warning("generation_rejected_no_valid_citation", ticket_id=ticket.id)
         return None
-    steps, flags = filter_steps(out.steps)
-    if screen_text(out.summary):
-        flags = sorted(set(flags + screen_text(out.summary)))
+    # Links and phone numbers are allowed only if they came from our own context (never from the ticket text)
+    context_text = "\n".join(txt for _, txt in context_items)
+    steps, flags = filter_generated_steps(out.steps, context_text)
+    summary_flags = screen_text(out.summary) + unverified_references(out.summary, context_text)
+    if summary_flags:
+        flags = sorted(set(flags + summary_flags))
         out.summary = "Suggested troubleshooting steps."
     if not steps:
         return None

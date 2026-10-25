@@ -252,6 +252,8 @@ async def add_solution(data: SolutionIn, db: AsyncSession = Depends(get_db), use
         steps=data.steps or knowledge.steps_from_text(data.solution_description), category_id=data.category_id,
         intent=data.intent, confidence_level=_verified_level(user), source="admin" if user.role_name == "admin" else "it_support",
         root_cause=data.root_cause, automated_actions=data.automated_actions, created_by=user.id, verified_by=user.id)
+    await ticket_svc.audit(db, "solution_created", user_id=user.id, resource_type="solution", resource_id=sol.id,
+                           details={"level": sol.confidence_level})
     return solution_out(sol)
 
 
@@ -260,7 +262,10 @@ async def verify_solution(solution_id: int, db: AsyncSession = Depends(get_db), 
     sol = await db.get(TicketSolution, solution_id)
     if sol is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Solution not found")
+    before = sol.confidence_level
     await knowledge.promote_solution(db, sol, _verified_level(user), user)
+    await ticket_svc.audit(db, "solution_verified", user_id=user.id, resource_type="solution", resource_id=sol.id,
+                           details={"from": before, "to": sol.confidence_level})
     return solution_out(sol)
 
 
@@ -270,4 +275,6 @@ async def reject_solution(solution_id: int, db: AsyncSession = Depends(get_db), 
     if sol is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Solution not found")
     await knowledge.reject_solution(db, sol, user)
+    await ticket_svc.audit(db, "solution_rejected", user_id=user.id, resource_type="solution", resource_id=sol.id,
+                           details={"level": sol.confidence_level})
     return solution_out(sol)

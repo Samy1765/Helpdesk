@@ -14,6 +14,12 @@ from pydantic_settings import BaseSettings
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 PROJECT_DIR = BACKEND_DIR.parent
 
+DEVELOPMENT_ENVS = ("development", "test")
+# Values that appear in docs or defaults; never acceptable outside development
+PLACEHOLDER_SECRETS = {"dev-secret-key-change-in-production", "change-me-to-a-64-char-random-string",
+                       "changeme", "change-me", "secret", "secret-key"}
+MIN_SECRET_LENGTH = 32
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -34,6 +40,17 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Sign-in lockout per username/email (unknown names included, so a lockout reveals nothing)
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_LOCKOUT_MINUTES: int = 15
+    # Per-process sliding-window budgets (the app runs one worker)
+    RATE_LIMIT_LOGIN_FAILURES_PER_IP: int = 30   # failed sign-ins per client IP per 15 minutes
+    RATE_LIMIT_REGISTER_PER_HOUR: int = 10       # self-registrations per client IP
+    RATE_LIMIT_CHAT_PER_MINUTE: int = 20         # chat messages / portal tickets per user
+    ALLOW_SELF_REGISTRATION: bool = True
+    MAX_REQUEST_KB: int = 1024                   # JSON bodies; uploads are capped by MAX_UPLOAD_MB
+    # Swagger / ReDoc / OpenAPI schema; blank = enabled everywhere except production
+    API_DOCS_ENABLED: Optional[bool] = None
 
     # Database. PostgreSQL is the primary target; SQLite is supported for local dev/tests.
     DATABASE_URL: str = "postgresql+asyncpg://precision_user:precision_pass@localhost:5432/precision_ai"
@@ -120,8 +137,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "console"
 
-    # CORS
-    CORS_ORIGINS: str = '["http://localhost:5173","http://localhost:3000"]'
+    # CORS: only needed when the SPA is served from another origin (Vite proxies /api in development)
+    CORS_ORIGINS: str = '["http://localhost:5173"]'
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -139,6 +156,14 @@ class Settings(BaseSettings):
         return self.APP_ENV == "production"
 
     @property
+    def is_development(self) -> bool:
+        return self.APP_ENV in DEVELOPMENT_ENVS
+
+    @property
+    def api_docs_enabled(self) -> bool:
+        return self.API_DOCS_ENABLED if self.API_DOCS_ENABLED is not None else not self.is_production
+
+    @property
     def is_sqlite(self) -> bool:
         return self.DATABASE_URL.startswith("sqlite")
 
@@ -150,10 +175,23 @@ class Settings(BaseSettings):
     }
 
 
+def validate_settings(settings: Settings) -> None:
+    """Refuse to start with development-only values anywhere except development and tests."""
+    if settings.is_development:
+        return
+    key = settings.SECRET_KEY.strip()
+    if key.lower() in PLACEHOLDER_SECRETS or key.startswith(("dev-", "change-me")) or len(key) < MIN_SECRET_LENGTH:
+        raise RuntimeError(
+            f"SECRET_KEY is a placeholder or shorter than {MIN_SECRET_LENGTH} characters (APP_ENV={settings.APP_ENV}). "
+            "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\"")
+    for origin in settings.cors_origins_list:
+        if origin == "*" or not origin.startswith(("http://", "https://")) or origin.count("/") > 2:
+            raise RuntimeError(f"CORS_ORIGINS must list exact origins such as https://helpdesk.example.com, got {origin!r}")
+
+
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance."""
     settings = Settings()
-    if settings.is_production and settings.SECRET_KEY.startswith("dev-"):
-        raise RuntimeError("SECRET_KEY must be set to a strong random value in production")
+    validate_settings(settings)
     return settings
